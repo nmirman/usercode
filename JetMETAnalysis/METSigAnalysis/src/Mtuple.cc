@@ -13,7 +13,7 @@
 //
 // Original Author:  Aleko Khukhunaishvili,6 R-029,+41227678914,
 //         Created:  Fri Jun 25 23:47:30 CEST 2010
-// $Id$
+// $Id: Mtuple.cc,v 1.1 2012/06/12 18:08:40 nmirman Exp $
 //
 //
 
@@ -50,6 +50,7 @@
 #include "DataFormats/Candidate/interface/Candidate.h"
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
 #include "DataFormats/MuonReco/interface/Muon.h"
+#include "DataFormats/PatCandidates/interface/Jet.h"
 
 #include "CondFormats/JetMETObjects/interface/JetResolution.h"
 
@@ -59,7 +60,7 @@
 #include "JetMETCorrections/Objects/interface/JetCorrector.h"
 #include "CondFormats/JetMETObjects/interface/JetResolution.h"
 
-
+#include "DataFormats/JetReco/interface/GenJet.h"
 
 #include "JetMETAnalysis/METSigAnalysis/interface/MtupleFormats.h"
 
@@ -524,6 +525,9 @@ Mtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 	    pfjs.eta[i]=0;
 	    pfjs.dpt[i]=0;
 	    pfjs.dphi[i]=0;
+       pfjs.genpt[i]=0;
+       pfjs.genphi[i]=0;
+       pfjs.geneta[i]=0;
 	}
 
 	Handle<reco::PFJetCollection> inputUncorJets;
@@ -554,6 +558,17 @@ Mtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 	    pfjs.dphi[icand]    = jpt*fPhiEta->Eval(jpt);
 	    delete fPtEta;
 	    delete fPhiEta;
+
+       // genjets
+       if(jet->genJet()){
+       pfjs.genpt[icand] = jet->genJet()->pt();
+       pfjs.genphi[icand] = jet->genJet()->phi();
+       pfjs.geneta[icand] = jet->genJet()->eta();
+       }else{
+       pfjs.genpt[icand] = 0;
+       pfjs.genphi[icand] = 0;
+       pfjs.geneta[icand] = 0;
+       }
 
 	    std::vector<reco::PFCandidatePtr> pfs = jet->getPFConstituents();
 	    for(std::vector<reco::PFCandidatePtr>::const_iterator it=pfs.begin(); it!=pfs.end(); ++it){
@@ -773,6 +788,9 @@ Mtuple::beginJob()
 	results_tree -> Branch("pfj_eta",    pfjs.eta,   "pfj_eta[pfj_size]/F");
 	results_tree -> Branch("pfj_dpt",    pfjs.dpt,   "pfj_dpt[pfj_size]/F");
 	results_tree -> Branch("pfj_dphi",   pfjs.dphi,  "pfj_dphi[pfj_size]/F");
+   results_tree -> Branch("pfj_genpt",  pfjs.genpt, "pfj_genpt[pfj_size]/F");
+   results_tree -> Branch("pfj_genphi",  pfjs.genphi, "pfj_genphi[pfj_size]/F");
+   results_tree -> Branch("pfj_geneta",  pfjs.geneta, "pfj_geneta[pfj_size]/F");
 
     }
     if(saveVertices_){

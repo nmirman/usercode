@@ -26,6 +26,9 @@ struct PFJets{
     float eta[NJets];
     float dpt[NJets];
     float dphi[NJets];
+    float genpt[NJets];
+    float genphi[NJets];
+    float geneta[NJets];
 };
 
 struct PFCandidates{

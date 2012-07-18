@@ -8,6 +8,7 @@
 <use   name="DataFormats/JetReco" />
 <use   name="DataFormats/TrackReco" />
 <use   name="DataFormats/VertexReco" />
+<use   name="DataFormats/PatCandidates"/>
 <use   name="HLTrigger/HLTcore" />
 <use   name="RecoMET/METAlgorithms" />
 <use   name="JetMETCorrections/Objects" />
