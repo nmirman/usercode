@@ -1,4 +1,4 @@
-ISMC = True
+ISMC = False
 
 import FWCore.ParameterSet.Config as cms
 process = cms.Process("NTUPLE")
@@ -12,11 +12,12 @@ process.source = cms.Source("PoolSource",
     )
 )
 
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 
 process.load("Configuration.StandardSequences.Geometry_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
-process.GlobalTag.globaltag = ('GR_R_44_V13::All','START44_V5D::All')[ISMC]
+#process.GlobalTag.globaltag = ('GR_R_44_V13::All','START44_V5D::All')[ISMC]
+process.GlobalTag.globaltag = ('GR_R_44_V15::All','START44_V13::All')[ISMC]
 process.load("JetMETCorrections.Configuration.DefaultJEC_cff")
 
 
@@ -72,19 +73,20 @@ metList.append(cms.untracked.InputTag("pfMetSigSmeared15", "","NTUPLE"))
 
 process.mymets = cms.Sequence(process.pfMetSig * process.pfMetSigSmeared15)
 
-trigger_paths = ["HLT_IsoMu15_v",
-		 "HLT_IsoMu24_v",
-		 "HLT_Mu24_v"
-]
+#trigger_paths = ["HLT_IsoMu15_v",
+#		 "HLT_IsoMu24_v",
+#		 "HLT_Mu24_v"
+#]
+trigger_paths = ["HLT_Mu17_Mu8_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
 
 
 process.ntuple = cms.EDAnalyzer('Mtuple',
 	debug		    = cms.untracked.bool(False),
 	isMC		    = cms.untracked.bool(ISMC),
-	OutputFileName	    = cms.untracked.string('ntuple1.root'),
+	OutputFileName	    = cms.untracked.string('ntuple.root'),
 
-	saveTriggerResults  = cms.untracked.bool(True),
+	saveTriggerResults  = cms.untracked.bool(False),
 	TriggerResultsTag   = cms.untracked.InputTag("TriggerResults","","HLT"),
 	TriggerEventTag	    = cms.untracked.InputTag("hltTriggerSummaryAOD","","HLT"),
 	TriggerPath	    = cms.untracked.vstring(trigger_paths),
@@ -92,7 +94,7 @@ process.ntuple = cms.EDAnalyzer('Mtuple',
 	saveMuons	    = cms.untracked.bool(True),
 	muonTag		    = cms.untracked.InputTag("muons"),
 
-	saveParticles	    = cms.untracked.bool(True),
+	saveParticles	    = cms.untracked.bool(False),
 	genparticlesTag	    = cms.untracked.InputTag("genParticles"),
 	pfcandidatesTag     = cms.untracked.InputTag("particleFlow"),
 	
@@ -103,6 +105,8 @@ process.ntuple = cms.EDAnalyzer('Mtuple',
 	jetResolAlgo	    = cms.string('AK5PF'),
 	jetResolEra	    = cms.string('Spring10'),
 
+   genjetsTag = cms.untracked.InputTag("ak5GenJets"),
+
 	saveMETs	    = cms.untracked.bool(True),
 	mets		    = cms.untracked.VInputTag(metList),
 	genMet		    = cms.untracked.InputTag("myGenMetCalo"),
@@ -110,7 +114,7 @@ process.ntuple = cms.EDAnalyzer('Mtuple',
     	saveVertices	    = cms.untracked.bool(True),
 	verticesTag	    = cms.untracked.InputTag("offlinePrimaryVertices"),
 
-	pileupTag	    = cms.untracked.InputTag("addPileupInfo"),
+	pileupTag	    = cms.untracked.InputTag("addPileupInfo")
 )
 if not ISMC:
     process.ntuple.pfjetCorrector2 = "ak5PFL1FastL2L3Residual"
@@ -147,7 +151,12 @@ process.p = cms.Path( process.noscraping *
 
 if ISMC:
     process.p.remove(process.noscraping)
-    process.p.remove(process.triggerSelection)
+    #process.p.remove(process.triggerSelection)
 else:
     process.p.remove(process.genParticlesForMETAllVisible)
     process.p.remove(process.myGenMetCalo)
+
+#process.out = cms.OutputModule( "PoolOutputModule"
+#      , fileName = cms.untracked.string( "patTuple.root" )
+#      )
+#process.outpath = cms.EndPath( process.out )

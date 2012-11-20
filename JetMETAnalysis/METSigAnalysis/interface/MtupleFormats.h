@@ -24,11 +24,21 @@ struct PFJets{
     float pt[NJets];
     float phi[NJets];
     float eta[NJets];
+    float energy[NJets];
     float dpt[NJets];
     float dphi[NJets];
-    float genpt[NJets];
-    float genphi[NJets];
-    float geneta[NJets];
+    float neutralHadronFraction[NJets];
+    float neutralEmFraction[NJets];
+    float chargedHadronFraction[NJets];
+    float chargedHadronMultiplicity[NJets];
+    float chargedEmFraction[NJets];
+};
+
+struct GenJets{
+    Int_t size;
+    float pt[NJets];
+    float phi[NJets];
+    float eta[NJets];
 };
 
 struct PFCandidates{
