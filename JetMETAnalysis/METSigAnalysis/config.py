@@ -1,4 +1,4 @@
-ISMC = False
+ISMC = True
 
 import FWCore.ParameterSet.Config as cms
 process = cms.Process("NTUPLE")
@@ -8,7 +8,7 @@ process.MessageLogger.cerr.FwkReport.reportEvery = 1000
 
 process.source = cms.Source("PoolSource", 
     fileNames = cms.untracked.vstring(
-	'file:../DY_44X_V9B.root',
+	'/store/mc/Fall11/DYJetsToLL_TuneZ2_M-50_7TeV-madgraph-tauola/AODSIM/PU_S6_START44_V9B-v1/0001/FEEEF8F5-853D-E111-946E-001EC9D82BCB.root',
     )
 )
 
@@ -16,7 +16,6 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 
 process.load("Configuration.StandardSequences.Geometry_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
-#process.GlobalTag.globaltag = ('GR_R_44_V13::All','START44_V5D::All')[ISMC]
 process.GlobalTag.globaltag = ('GR_R_44_V15::All','START44_V13::All')[ISMC]
 process.load("JetMETCorrections.Configuration.DefaultJEC_cff")
 
@@ -47,7 +46,8 @@ process.kt6PFJets = kt4PFJets.clone(
     src = cms.InputTag('pfNoMuon'),
     rParam = cms.double(0.6),
     doRhoFastjet = cms.bool(True),
-    Rho_EtaMax = cms.double(2.5)
+    doAreaFastjet = cms.bool(True),
+    Rho_EtaMax = cms.double(4.4)
 )
 
 process.mypf2pat = cms.Sequence(process.pfAllMuons * 
@@ -73,11 +73,8 @@ metList.append(cms.untracked.InputTag("pfMetSigSmeared15", "","NTUPLE"))
 
 process.mymets = cms.Sequence(process.pfMetSig * process.pfMetSigSmeared15)
 
-#trigger_paths = ["HLT_IsoMu15_v",
-#		 "HLT_IsoMu24_v",
-#		 "HLT_Mu24_v"
-#]
 trigger_paths = ["HLT_Mu17_Mu8_v"]
+#trigger_paths = ["HLT_Mu24_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
 
 
@@ -111,7 +108,7 @@ process.ntuple = cms.EDAnalyzer('Mtuple',
 	mets		    = cms.untracked.VInputTag(metList),
 	genMet		    = cms.untracked.InputTag("myGenMetCalo"),
 
-    	saveVertices	    = cms.untracked.bool(True),
+   saveVertices	    = cms.untracked.bool(True),
 	verticesTag	    = cms.untracked.InputTag("offlinePrimaryVertices"),
 
 	pileupTag	    = cms.untracked.InputTag("addPileupInfo")
@@ -151,7 +148,6 @@ process.p = cms.Path( process.noscraping *
 
 if ISMC:
     process.p.remove(process.noscraping)
-    #process.p.remove(process.triggerSelection)
 else:
     process.p.remove(process.genParticlesForMETAllVisible)
     process.p.remove(process.myGenMetCalo)

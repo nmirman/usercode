@@ -12,6 +12,7 @@
 <use   name="HLTrigger/HLTcore" />
 <use   name="RecoMET/METAlgorithms" />
 <use   name="JetMETCorrections/Objects" />
+<use   name="PhysicsTools/Utilities" />
 <use   name="rootminuit2"/>
 <use   name="rootcore"/>
 <use   name="lhapdf"/>

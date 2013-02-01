@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  Aleko Khukhunaishvili,6 R-029,+41227678914,
 //         Created:  Fri Jun 25 23:47:30 CEST 2010
-// $Id: Mtuple.cc,v 1.2 2012/07/18 21:25:31 nmirman Exp $
+// $Id: Mtuple.cc,v 1.3 2012/11/20 06:11:12 nmirman Exp $
 //
 //
 
@@ -62,6 +62,8 @@ Implementation:
 
 #include "DataFormats/JetReco/interface/GenJet.h"
 
+#include "PhysicsTools/Utilities/interface/LumiReWeighting.h"
+
 #include "JetMETAnalysis/METSigAnalysis/interface/MtupleFormats.h"
 
 #include <TFile.h>
@@ -97,6 +99,9 @@ class Mtuple : public edm::EDAnalyzer {
       virtual void analyze(const edm::Event &, const edm::EventSetup &);
       void useOriginalPtrs(const edm::ProductID& productID);
       virtual void endJob() ;
+
+      static const double PU2011_MCf[50];
+      static const double PU2011_Dataf[50];
 
       Bool_t		debug_;
       Bool_t		isMC_;
@@ -161,6 +166,9 @@ class Mtuple : public edm::EDAnalyzer {
 
       std::vector<reco::CandidatePtr> clusteredParticlePtrs_;
       std::vector<int>	jetIndex_;
+
+      float MyWeight;
+      float T_nvertices;
 };
 
 Mtuple::Mtuple(const edm::ParameterSet& iConfig)
@@ -213,11 +221,120 @@ Mtuple::Mtuple(const edm::ParameterSet& iConfig)
 
    ptResol_  = new JetResolution(fpt.fullPath().c_str(),false);
    phiResol_ = new JetResolution(fphi.fullPath().c_str(),false);
+
 }
 
 Mtuple::~Mtuple(){}
 
+const double Mtuple::PU2011_MCf[50] = {
+   // 'true' distribution for Fall2011 MC
+   // obtained at https://twiki.cern.ch/twiki/bin/view/CMS/Pileup_2011_Reweighting
+   0.003388501,
+   0.010357558,
+   0.024724258,
+   0.042348605,
+   0.058279812,
+   0.068851751,
+   0.072914824,
+   0.071579609,
+   0.066811668,
+   0.060672356,
+   0.054528356,
+   0.04919354,
+   0.044886042,
+   0.041341896,
+   0.0384679,
+   0.035871463,
+   0.03341952,
+   0.030915649,
+   0.028395374,
+   0.025798107,
+   0.023237445,
+   0.020602754,
+   0.0180688,
+   0.015559693,
+   0.013211063,
+   0.010964293,
+   0.008920993,
+   0.007080504,
+   0.005499239,
+   0.004187022,
+   0.003096474,
+   0.002237361,
+   0.001566428,
+   0.001074149,
+   0.000721755,
+   0.000470838,
+   0.00030268,
+   0.000184665,
+   0.000112883,
+   6.74043E-05,
+   3.82178E-05,
+   2.22847E-05,
+   1.20933E-05,
+   6.96173E-06,
+   3.4689E-06,
+   1.96172E-06,
+   8.49283E-07,
+   5.02393E-07,
+   2.15311E-07,
+   9.56938E-08
+};
 
+const double Mtuple::PU2011_Dataf[50] = {
+   // 'true' distribution for 2011 dataset
+   // obtained with pileupCalc.py (12.19.2012)
+   5.54422e+06,
+   1.25309e+06,
+   9.11919e+06,
+   1.19861e+08,
+   3.81257e+08,
+   5.40125e+08,
+   5.45336e+08,
+   4.93285e+08,
+   4.38377e+08,
+   4.03235e+08,
+   3.72621e+08,
+   3.46901e+08,
+   3.27696e+08,
+   3.0181e+08,
+   2.58952e+08,
+   1.98323e+08,
+   1.31701e+08,
+   7.46387e+07,
+   3.57587e+07,
+   1.44475e+07,
+   4.97014e+06,
+   1.4923e+06,
+   405908,
+   104272,
+   26235.1,
+   6600.02,
+   1659.27,
+   415.404,
+   109.906,
+   41.2309,
+   33.2132,
+   43.8802,
+   63.9808,
+   91.6263,
+   126.102,
+   166.165,
+   209.506,
+   252.713,
+   291.616,
+   321.941,
+   340.153,
+   343.94,
+   332.511,
+   307.736,
+   272.51,
+   230.858,
+   187.096,
+   145.067,
+   107.618,
+   76.3918
+};
    void
 Mtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
@@ -233,6 +350,7 @@ Mtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       prescale[i]=0.;
    }
 
+   MyWeight = 1.0;
    if(isMC_){
       Handle<GenEventInfoProduct> gi;
       iEvent.getByLabel("generator", gi);
@@ -270,7 +388,40 @@ Mtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          puN[i]  = PupInfo->at(i).getPU_NumInteractions();
          puBC[i] = PupInfo->at(i).getBunchCrossing();
       }
+
+      // prescription for PU reweighting
+      std::vector< float > PU2011_MC;
+      std::vector< float > PU2011_Data;
+
+      for( int i=0; i<50; i++) {
+         PU2011_MC.push_back( PU2011_MCf[i] );
+         PU2011_Data.push_back( PU2011_Dataf[i] );
+      }
+      edm::LumiReWeighting LumiWeights_( PU2011_MC, PU2011_Data );
+
+      std::vector<PileupSummaryInfo>::const_iterator PVI;
+
+      int npv = -1;
+      float Tnvtx = -1.0;
+      for(PVI = PupInfo->begin(); PVI != PupInfo->end(); ++PVI) {
+
+         int BX = PVI->getBunchCrossing();
+
+         if(BX == 0) { 
+            npv = PVI->getPU_NumInteractions();
+
+            // or, if you want the true number of interactions:
+
+            Tnvtx = PVI->getTrueNumInteractions(); 
+            continue;
+         }
+
+      }
+
+      MyWeight = LumiWeights_.weight( Tnvtx );
+      T_nvertices = Tnvtx;
    }
+
    //get rho
    edm::Handle<double> rhoH;
    iEvent.getByLabel(edm::InputTag("kt6PFJets","rho","NTUPLE"),rhoH);
@@ -633,14 +784,43 @@ Mtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       pfps.size = pfcandidates->size();
    }
 
-   bool mu_selection = (mu.size == 2) and (mu.pt[0] > 20) and (mu.pt[1] > 20);
-   //bool mu_tight = true;
-   //bool mu_iso = true;
-   //for(int i=0; i < mu.size; i++){
-      //tight muon selection
-   //}
-   //FILL THE TREE
-   if( mu_selection ){
+   // Selection Criteria
+   bool mu_checksize = (mu.size == 2);
+   bool mu_tight = true;
+   bool mu_iso = true;
+   bool mu_checketa = true;
+   bool mu_checkpt = true;
+   bool mu_zpeak = true;
+
+   for(int i=0; i < mu.size; i++){
+      // tight muon selection
+      if( !(mu.isGlobal[i] and mu.chi2[i] < 10 and mu.muonHits[i] > 0
+               and mu.nMatches[i] > 1 and mu.dxy[i] < 0.2 and mu.pixelHits[i] > 0
+               and mu.numberOfValidTrackerLayers[i] > 8) ){
+         mu_tight = false;
+      }
+      // isolation
+      if( !( (mu.dr03TkSumPt[i]+mu.dr03EcalRecHitSumEt[i]+mu.dr03HcalTowerSumEt[i])
+               / mu.pt[i] < 0.1) ){
+         mu_iso = false;
+      }
+      if( !(fabs(mu.eta[i]) < 2.4) ) mu_checketa = false;
+      // pt cut
+      if( !(mu.pt[i] > 20) ) mu_checkpt = false;
+   }
+   if( mu.size == 2 ){
+      // Z-mass window
+      TLorentzVector mu1temp( mu.px[0], mu.py[0], mu.pz[0], mu.e[0] );
+      TLorentzVector mu2temp( mu.px[1], mu.py[1], mu.pz[1], mu.e[1] );
+      mu_zpeak = (mu1temp+mu2temp).M() > 60 and (mu1temp+mu2temp).M() < 120;
+   }
+   bool Zmumu_selection = (mu.size == 2) and mu_tight and mu_iso and mu_checketa
+      and mu_checkpt and mu_zpeak;
+   bool Wmunu_selection = (mu.size == 1) and mu_tight and mu_iso and mu_checketa
+      and mu_checkpt;
+
+   // FILL THE TREE
+   if( Zmumu_selection ){
       results_tree -> Fill();
    }
 
@@ -695,6 +875,8 @@ Mtuple::beginJob()
       results_tree -> Branch("puN",   puN,   "puN[3]/I");
       results_tree -> Branch("puBC",   puBC,   "puBC[3]/I");
       results_tree -> Branch("puNMean",   &puNMean,   "puNMean/F");
+      results_tree -> Branch("puMyWeight", &MyWeight, "puMyWeight/F");
+      results_tree -> Branch("puTnvtx", &T_nvertices, "puTnvtx/F");
    }
 
    results_tree -> Branch("puRho",   &puRho,   "puRho/F");
