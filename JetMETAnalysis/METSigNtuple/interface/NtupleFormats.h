@@ -9,8 +9,9 @@ const Int_t NVertices = 100;
 struct RecoMuon{
    int size;
    int charge[NMuons];
-   int isGlobal[NMuons];
-   int isTracker[NMuons];
+   bool isGlobal[NMuons];
+   bool isTracker[NMuons];
+   bool isPF[NMuons];
    int trackerHits[NMuons];
    int pixelHits[NMuons];
    int muonHits[NMuons];
@@ -35,15 +36,20 @@ struct RecoMuon{
    float py[NMuons];
    float pz[NMuons];
    float dxy[NMuons];
+   float dz[NMuons];
    float dr03TkSumPt[NMuons];
    float dr03EcalRecHitSumEt[NMuons];
    float dr03HcalTowerSumEt[NMuons];
+   float dr04chHad[NMuons];
+   float dr04neutHad[NMuons];
+   float dr04photons[NMuons];
 };
 
 struct Vertices{
    Int_t size;
    Bool_t isFake[NVertices];
    float ndof[NVertices];
+   float chi2[NVertices];
    float x[NVertices];
    float y[NVertices];
    float z[NVertices];
@@ -76,6 +82,12 @@ struct PFJets{
    float chargedHadronFraction[NJets];
    float chargedHadronMultiplicity[NJets];
    float chargedEmFraction[NJets];
+
+   float puid_mva[NJets];
+   int puid_idflag[NJets];
+   bool puid_passloose[NJets];
+   bool puid_passmedium[NJets];
+   bool puid_passtight[NJets];
 };
 
 struct GenJets{

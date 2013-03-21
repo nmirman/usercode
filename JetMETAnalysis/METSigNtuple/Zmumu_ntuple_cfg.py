@@ -33,6 +33,10 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(options.maxE
 process.source = cms.Source("PoolSource",
       fileNames = cms.untracked.vstring(
          '/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00037C53-AAD1-E111-B1BE-003048D45F38.root'
+         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00050BBE-D5D2-E111-BB65-001E67398534.root',
+         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00B16DF1-8FD1-E111-ADBB-F04DA23BCE4C.root',
+         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00D370C2-E3D2-E111-9C87-003048673F0A.root',
+         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00FB6563-58D2-E111-AFCB-001E67397D73.root'
          #'/store/data/Run2012A/DoubleMu/AOD/13Jul2012-v1/00000/0048B245-B9D2-E111-A8DC-0018F3D096BE.root'
          #'/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root'
          )
@@ -47,7 +51,6 @@ process.load("CommonTools.ParticleFlow.PF2PAT_cff")
 
 process.pfAllMuons.src="particleFlow"
 process.pfMuonsFromVertex.dzCut=9999
-process.pfSelectedMuons.cut = cms.string('pt>20 && abs(eta)<2.1')
 process.pfNoMuon.bottomCollection   = "particleFlow"
 process.pfNoMuon.topCollection      = "pfSelectedMuons"
 process.pfJets.doAreaFastjet        = True
@@ -91,6 +94,24 @@ process.mymet = cms.Sequence(
 
 metList = []
 metList.append(cms.untracked.InputTag("pfMet", "", ""))
+
+# jet pileup id
+from CMGTools.External.pujetidsequence_cff import puJetId, puJetMva
+
+process.recoPuJetId = puJetId.clone(
+      jets = cms.InputTag("pfJets"),
+      applyJec = cms.bool(True),
+      inputIsCorrected = cms.bool(False),                
+      )
+
+process.recoPuJetMva = puJetMva.clone(
+      jets = cms.InputTag("pfJets"),
+      jetids = cms.InputTag("recoPuJetId"),
+      applyJec = cms.bool(True),
+      inputIsCorrected = cms.bool(False),                
+      )
+
+process.recoPuJetIdSequence = cms.Sequence(process.recoPuJetId * process.recoPuJetMva )
 
 trigger_paths = ["HLT_Mu17_Mu8_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
@@ -199,11 +220,17 @@ process.triggerSelection = hltHighLevel.clone(
       )
 
 process.p = cms.Path(
-      process.filtersSeq *
       process.triggerSelection *
+      process.filtersSeq *
       process.mypf2pat *
       process.mymet *
+      process.recoPuJetIdSequence *
       process.demo
       )
 if options.runOnMC :
    process.p.remove( process.filtersSeq )
+
+#process.out = cms.OutputModule( "PoolOutputModule"
+#      , fileName = cms.untracked.string( "patTuple.root" )
+#      )
+#process.outpath = cms.EndPath( process.out )

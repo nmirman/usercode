@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id$
+// $Id: METSigNtuple.cc,v 1.1 2013/03/20 18:22:28 nmirman Exp $
 //
 //
 
@@ -57,6 +57,8 @@ Implementation:
 #include "DataFormats/JetReco/interface/GenJet.h"
 
 #include "PhysicsTools/Utilities/interface/LumiReWeighting.h"
+
+#include "CMGTools/External/interface/PileupJetIdentifier.h"
 
 #include "JetMETAnalysis/METSigNtuple/interface/NtupleFormats.h"
 
@@ -368,16 +370,12 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
       std::vector<PileupSummaryInfo>::const_iterator PVI;
 
-      int npv = -1;
       float Tnvtx = -1.0;
       for(PVI = PupInfo->begin(); PVI != PupInfo->end(); ++PVI) {
 
          int BX = PVI->getBunchCrossing();
 
          if(BX == 0) { 
-            npv = PVI->getPU_NumInteractions();
-
-            // or, if you want the true number of interactions:
             Tnvtx = PVI->getTrueNumInteractions(); 
             continue;
          }
@@ -402,6 +400,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    for( edm::View<reco::Vertex>::const_iterator v = vertices->begin() ; v!= vertices->end() && icand<NVertices; v++ ){
       vtxs.isFake[icand]  = v->isFake();
       vtxs.ndof[icand] = v->ndof();
+      vtxs.chi2[icand] = v->chi2();
       vtxs.x[icand] = v->x();
       vtxs.y[icand] = v->y();
       vtxs.z[icand] = v->z();
@@ -409,6 +408,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       icand++;
    } 
    vtxs.size = icand;
+   reco::Vertex primaryVertex = vertices->at(0);
 
    // muons
    edm::Handle<std::vector<reco::Muon> > muonsHandle;
@@ -424,29 +424,31 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    for(std::vector<reco::Muon>::const_iterator it=muons.begin(); it!=muons.end(); it++, i++){
       reco::Muon muon = *it;
 
-      mu.charge[i]    = muon.charge();
-      mu.pt[i]     = muon.pt();
-      mu.p[i]      = muon.p();
-      mu.e[i]      = muon.energy();
-      mu.phi[i]       = muon.phi();
-      mu.eta[i]       = muon.eta();
-      mu.px[i]     = muon.px();
-      mu.py[i]     = muon.py();
-      mu.pz[i]     = muon.pz();
+      mu.charge[i]   = muon.charge();
+      mu.pt[i]       = muon.pt();
+      mu.p[i]        = muon.p();
+      mu.e[i]        = muon.energy();
+      mu.phi[i]      = muon.phi();
+      mu.eta[i]      = muon.eta();
+      mu.px[i]       = muon.px();
+      mu.py[i]       = muon.py();
+      mu.pz[i]       = muon.pz();
 
-      mu.isGlobal[i]  = muon.isGlobalMuon() ? 1 : 0; 
-      mu.isTracker[i] = muon.isTrackerMuon() ? 1 : 0;
+      mu.isGlobal[i]  = muon.isGlobalMuon(); 
+      mu.isTracker[i] = muon.isTrackerMuon();
+      mu.isPF[i]      = muon.isPFMuon();
 
       mu.glpt[i]=-1;
       if(muon.isGlobalMuon()){
-         reco::TrackRef gm  = muon.globalTrack();
-         mu.dxy[i]       = gm->dxy(beamSpotHandle->position());
-         mu.chi2[i]      = gm->normalizedChi2();
-         mu.trackerHits[i]   = gm->hitPattern().numberOfValidTrackerHits();
-         mu.pixelHits[i]       = gm->hitPattern().numberOfValidPixelHits();
-         mu.muonHits[i]     = gm->hitPattern().numberOfValidMuonHits();
-         mu.nMatches[i]     = muon.numberOfMatchedStations();
-         mu.glpt[i]      = gm->pt();
+         reco::TrackRef gm    = muon.globalTrack();
+         mu.chi2[i]           = gm->normalizedChi2();
+         mu.trackerHits[i]    = gm->hitPattern().numberOfValidTrackerHits();
+         mu.pixelHits[i]      = gm->hitPattern().numberOfValidPixelHits();
+         mu.muonHits[i]       = gm->hitPattern().numberOfValidMuonHits();
+         mu.nMatches[i]       = muon.numberOfMatchedStations();
+         mu.glpt[i]           = gm->pt();
+         mu.dxy[i]            = gm->dxy(primaryVertex.position());
+         mu.dz[i]             = gm->dz(primaryVertex.position());
       }
       mu.trpt[i]=-1;
       if(muon.isTrackerMuon()){
@@ -461,10 +463,20 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          mu.numberOfValidTrackerLayers[i] = it->hitPattern().trackerLayersWithMeasurement();
          mu.trpt[i]           = it->pt();
       }
+      // if best track is available, redefine dxy and dz
+      reco::TrackRef bt = muon.muonBestTrack();
+      if( bt.isNonnull() and bt.isAvailable() ){
+         mu.dxy[i]            = bt->dxy(primaryVertex.position());
+         mu.dz[i]             = bt->dz(primaryVertex.position());
+      }
 
       mu.dr03TkSumPt[i]      = muon.isolationR03().sumPt;
       mu.dr03EcalRecHitSumEt[i] = muon.isolationR03().emEt;
       mu.dr03HcalTowerSumEt[i]  = muon.isolationR03().hadEt;
+
+      mu.dr04chHad[i] = muon.pfIsolationR04().sumChargedHadronPt;
+      mu.dr04neutHad[i] = muon.pfIsolationR04().sumNeutralHadronEt;
+      mu.dr04photons[i] = muon.pfIsolationR04().sumPhotonEt;
 
    }
 
@@ -511,13 +523,22 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    Handle<reco::PFJetCollection> inputUncorJets;
    iEvent.getByLabel( pfjetsTag_, inputUncorJets );
+
+   // pileup jet id
+   Handle<ValueMap<float> > puJetIdMVA;
+   iEvent.getByLabel(edm::InputTag("recoPuJetMva","fullDiscriminant"), puJetIdMVA);
+
+   Handle<ValueMap<int> > puJetIdFlag;
+   iEvent.getByLabel(edm::InputTag("recoPuJetMva","fullId"), puJetIdFlag);
+
+   // jet energy corrections
    const JetCorrector* corrector  = JetCorrector::getJetCorrector (pfjetCorrectorL1_, iSetup);
    const JetCorrector* corrector2 = JetCorrector::getJetCorrector (pfjetCorrectorL123_, iSetup);
 
    icand = 0;
    for(reco::PFJetCollection::const_iterator jet = inputUncorJets->begin(); jet != inputUncorJets->end() && icand<saveJets_; ++jet) {
       int index = jet - inputUncorJets->begin();
-      edm::RefToBase<reco::Jet> jetRef(edm::Ref<reco::PFJetCollection>(inputUncorJets,index));
+      edm::RefToBase<reco::PFJet> jetRef(edm::Ref<reco::PFJetCollection>(inputUncorJets,index));
       pfjs.nco[icand]  = jet->nConstituents();
       pfjs.l1[icand]   = corrector->correction (*jet, iEvent, iSetup);
       pfjs.l1l2l3[icand]= corrector2->correction (*jet, iEvent, iSetup);
@@ -541,6 +562,15 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       pfjs.sigmaphi[icand]    = fPhiEta->Eval(jpt);
       delete fPtEta;
       delete fPhiEta;
+
+      pfjs.puid_mva[icand]  = (*puJetIdMVA)[jetRef];
+      pfjs.puid_idflag[icand] = (*puJetIdFlag)[jetRef];
+      pfjs.puid_passloose[icand] = PileupJetIdentifier::passJetId( pfjs.puid_idflag[icand],
+            PileupJetIdentifier::kLoose );
+      pfjs.puid_passmedium[icand] = PileupJetIdentifier::passJetId( pfjs.puid_idflag[icand],
+            PileupJetIdentifier::kMedium );
+      pfjs.puid_passtight[icand] = PileupJetIdentifier::passJetId( pfjs.puid_idflag[icand],
+            PileupJetIdentifier::kTight );
 
       icand++;
    }
@@ -570,7 +600,6 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
 
    // selection criteria
-   bool mu_checksize = (mu.size == 2);
    bool mu_tight = true;
    bool mu_iso = true;
    bool mu_checketa = true;
@@ -579,14 +608,14 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    for(int i=0; i < mu.size; i++){
       // tight muon selection
-      if( !(mu.isGlobal[i] and mu.chi2[i] < 10 and mu.muonHits[i] > 0
-               and mu.nMatches[i] > 1 and mu.dxy[i] < 0.2 and mu.pixelHits[i] > 0
-               and mu.numberOfValidTrackerLayers[i] > 8) ){
+      if( !(mu.isGlobal[i] and mu.isPF[i] and mu.chi2[i] < 10 and mu.muonHits[i] > 0
+               and mu.nMatches[i] > 1 and mu.dxy[i] < 0.2 and mu.dz[i] < 0.5
+               and mu.pixelHits[i] > 0 and mu.numberOfValidTrackerLayers[i] > 5) ){
          mu_tight = false;
       }
       // isolation
-      if( !( (mu.dr03TkSumPt[i]+mu.dr03EcalRecHitSumEt[i]+mu.dr03HcalTowerSumEt[i])
-               / mu.pt[i] < 0.1) ){
+      if( !( (mu.dr04chHad[i]+mu.dr04neutHad[i]+mu.dr04photons[i])
+               / mu.pt[i] < 0.12) ){
          mu_iso = false;
       }
       if( !(fabs(mu.eta[i]) < 2.4) ) mu_checketa = false;
@@ -601,8 +630,6 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    }
    bool Zmumu_selection = (mu.size == 2) and mu_tight and mu_iso and mu_checketa
       and mu_checkpt and mu_zpeak;
-   bool Wmunu_selection = (mu.size == 1) and mu_tight and mu_iso and mu_checketa
-      and mu_checkpt;
 
    // FILL THE TREE
    if( Zmumu_selection ){
@@ -628,8 +655,9 @@ METSigNtuple::beginJob()
    }
    results_tree -> Branch("mu_size",   &mu.size, "mu_size/I");
    results_tree -> Branch("mu_charge",   mu.charge, "mu_charge[mu_size]/I");
-   results_tree -> Branch("mu_isGlobal", mu.isGlobal, "mu_isGlobal[mu_size]/I");
-   results_tree -> Branch("mu_isTracker", mu.isTracker, "mu_isTracker[mu_size]/I");
+   results_tree -> Branch("mu_isGlobal", mu.isGlobal, "mu_isGlobal[mu_size]/O");
+   results_tree -> Branch("mu_isTracker", mu.isTracker, "mu_isTracker[mu_size]/O");
+   results_tree -> Branch("mu_isPF", mu.isPF, "mu_isPF[mu_size]/O");
    results_tree -> Branch("mu_trackerHits", mu.trackerHits, "mu_trackerHits[mu_size]/I");
    results_tree -> Branch("mu_pixelHits", mu.pixelHits, "mu_pixelHits[mu_size]/I");
    results_tree -> Branch("mu_muonHits", mu.muonHits, "mu_muonHits[mu_size]/I");
@@ -659,6 +687,9 @@ METSigNtuple::beginJob()
    results_tree -> Branch("mu_dr03TkSumPt", mu.dr03TkSumPt, "mu_dr03TkSumPt[mu_size]/F");
    results_tree -> Branch("mu_dr03EcalRecHitSumEt", mu.dr03EcalRecHitSumEt, "mu_dr03EcalRecHitSumEt[mu_size]/F");
    results_tree -> Branch("mu_dr03HcalTowerSumEt", mu.dr03HcalTowerSumEt, "mu_dr03HcalTowerSumEt[mu_size]/F");
+   results_tree -> Branch("mu_dr04chHad", mu.dr04chHad, "mu_dr04chHad[mu_size]/F");
+   results_tree -> Branch("mu_dr04neutHad", mu.dr04neutHad, "mu_dr04neutHad[mu_size]/F");
+   results_tree -> Branch("mu_dr04photons", mu.dr04photons, "mu_dr04photons[mu_size]/F");
 
    results_tree -> Branch("met_size", &metsSize_, "met_size/I");
    results_tree -> Branch("met_pt", mets.pt, "met_pt[met_size]/F");
@@ -696,6 +727,15 @@ METSigNtuple::beginJob()
          "pfj_chargedEmFraction[pfj_size]/F");
    results_tree -> Branch("pfj_numConstituents", pfjs.nco, "pfj_numConstituents[pfj_size]/I");
 
+   results_tree -> Branch("pfj_puid_mva", pfjs.puid_mva, "pfj_puid_mva[pfj_size]/F");
+   results_tree -> Branch("pfj_puid_idflag", pfjs.puid_idflag, "pfj_puid_idflag[pfj_size]/I");
+   results_tree -> Branch("pfj_puid_passloose", pfjs.puid_passloose,
+         "pfj_puid_passloose[pfj_size]/O");
+   results_tree -> Branch("pfj_puid_passmedium", pfjs.puid_passmedium,
+         "pfj_puid_passmedium[pfj_size]/O");
+   results_tree -> Branch("pfj_puid_passtight", pfjs.puid_passtight,
+         "pfj_puid_passtight[pfj_size]/O");
+
    if(runOnMC_){
       results_tree -> Branch("genj_size",  &genjs.size, "genj_size/I");
       results_tree -> Branch("genj_pt",  genjs.pt, "genj_pt[genj_size]/F");
@@ -711,6 +751,7 @@ METSigNtuple::beginJob()
    results_tree -> Branch("v_size",   &vtxs.size, "v_size/I");
    results_tree -> Branch("v_isFake",  vtxs.isFake,   "v_isFake[v_size]/O");
    results_tree -> Branch("v_ndof",    vtxs.ndof,    "v_ndof[v_size]/F");
+   results_tree -> Branch("v_chi2",    vtxs.chi2,    "v_chi2[v_size]/F");
    results_tree -> Branch("v_x",       vtxs.x,   "v_x[v_size]/F");
    results_tree -> Branch("v_y",       vtxs.y,   "v_y[v_size]/F");
    results_tree -> Branch("v_z",       vtxs.z,   "v_z[v_size]/F");
