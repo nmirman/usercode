@@ -1,6 +1,6 @@
 #!/bin/bash
 
-crabout="/eos/uscms/store/user/nmirman/CRABjobs/crab_ZmumuNtuples_data_20130315"
+crabout="/eos/uscms/store/user/nmirman/CRABjobs/crab_ZmumuNtuples_data_20130427"
 
 filelist=""
 for dir in `ls ${crabout}`
@@ -12,7 +12,7 @@ do
 
    for i in `seq $numfiles`
    do
-      files=`ls ${crabout}/${dir}/ntuple_${i}_*`
+      files=(`ls ${crabout}/${dir}/ntuple_${i}_*`)
       if [ "${#files[@]}" > "0" ]
       then
          filelist=${filelist}"${files[0]} "
@@ -21,6 +21,6 @@ do
 
 done
 
-hadd ~/nobackup/Data.root ${filelist}
-mv ~/nobackup/Data.root /eos/uscms/store/user/nmirman/Ntuples/Zmumu/20130315/
+hadd /uscmst1b_scratch/lpc1/3DayLifetime/nmirman/Data.root ${filelist}
+mv /uscmst1b_scratch/lpc1/3DayLifetime/nmirman/Data.root /eos/uscms/store/user/nmirman/Ntuples/Zmumu/20130427/
 

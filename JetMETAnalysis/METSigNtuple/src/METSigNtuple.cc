@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.1 2013/03/20 18:22:28 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.2 2013/03/21 19:10:55 nmirman Exp $
 //
 //
 
@@ -60,6 +60,15 @@ Implementation:
 
 #include "CMGTools/External/interface/PileupJetIdentifier.h"
 
+#include "FWCore/Common/interface/TriggerNames.h"
+#include "HLTrigger/HLTcore/interface/HLTConfigProvider.h"
+
+#include "DataFormats/EgammaCandidates/interface/GsfElectron.h"
+#include "DataFormats/EgammaCandidates/interface/Conversion.h"
+#include "DataFormats/RecoCandidate/interface/IsoDeposit.h"
+#include "CommonTools/ParticleFlow/test/PFIsoReaderDemo.h"
+#include "EGamma/EGammaAnalysisTools/interface/EGammaCutBasedEleId.h"
+
 #include "JetMETAnalysis/METSigNtuple/interface/NtupleFormats.h"
 
 #include <TFile.h>
@@ -78,8 +87,11 @@ Implementation:
 using namespace std;
 using namespace edm;
 
-bool comparePT(const reco::Muon &mu1, const reco::Muon &mu2){
+bool compareMuPT(const reco::PFCandidate &mu1, const reco::PFCandidate &mu2){
    return (mu1.pt() > mu2.pt());
+}
+bool compareElecPT(const reco::PFCandidate &elec1, const reco::PFCandidate &elec2){
+   return (elec1.pt() > elec2.pt());
 }
 
 //
@@ -111,7 +123,16 @@ class METSigNtuple : public edm::EDAnalyzer {
       Bool_t      runOnMC_;
       std::string OutputFileName_;
 
-      edm::InputTag  muonTag_;
+      Bool_t      saveJetInfo_;
+
+      std::string selectionChannel_;
+
+      edm::InputTag muonTag_;
+      edm::InputTag electronTag_;
+
+      edm::InputTag conversionsInputTag_;
+      edm::InputTag rhoIsoInputTag;
+      std::vector<edm::InputTag> isoValInputTags_;
 
       std::vector<edm::InputTag> metsTag_;
       Int_t    metsSize_;
@@ -129,6 +150,7 @@ class METSigNtuple : public edm::EDAnalyzer {
 
       edm::InputTag  verticesTag_;
 
+      HLTConfigProvider hltConfig_;
       JetResolution *ptRes_;
       JetResolution *phiRes_;
 
@@ -136,21 +158,34 @@ class METSigNtuple : public edm::EDAnalyzer {
       TTree    *results_tree;  
 
       RecoMuon    mu;
+      RecoElectron    elec;
       METs     mets;
       float    genmet_et, genmet_phi, genmet_sumEt;
       Long64_t    run, event, lumi;
       PFJets      pfjs;
       GenJets     genjs;
+      GenW        genW;
+      GenNu       gennu;
+      GenMu       genmu;
+      GenInfo     geninfo;
 
       Vertices    vtxs;
 
       float MyWeight;
       float T_nvertices;
+
+      std::vector<std::string>      TriggerPath_; 
+      std::vector<edm::InputTag>    TriggerPathFilter_;    
+      std::vector<std::string>      TriggerPathVersioned_;
+      Int_t  nTriggerPaths_;
 };
 
 //
 // constants, enums and typedefs
 //
+
+typedef std::vector< edm::Handle< edm::ValueMap<reco::IsoDeposit> > >   IsoDepositMaps;
+typedef std::vector< edm::Handle< edm::ValueMap<double> > >             IsoDepositVals;
 
 //
 // static data member definitions
@@ -166,10 +201,19 @@ METSigNtuple::METSigNtuple(const edm::ParameterSet& iConfig)
    runOnMC_      = iConfig.getUntrackedParameter<Bool_t>("runOnMC");    
    OutputFileName_  = iConfig.getUntrackedParameter<std::string>("output_file");
 
+   selectionChannel_ = iConfig.getUntrackedParameter<std::string>("selectionChannel");
+
+   saveJetInfo_      = iConfig.getUntrackedParameter<Bool_t>("saveJetInfo");
+
    muonTag_    = iConfig.getUntrackedParameter<edm::InputTag>("muonTag");
+   electronTag_ = iConfig.getUntrackedParameter<edm::InputTag>("electronTag");
    metsTag_    = iConfig.getUntrackedParameter<std::vector<edm::InputTag> >("metsTag");
    genMetTag_     = iConfig.getUntrackedParameter<edm::InputTag>("genmetTag");
    metsSize_      = metsTag_.size();
+
+   conversionsInputTag_    = iConfig.getParameter<edm::InputTag>("conversionsInputTag");
+   rhoIsoInputTag          = iConfig.getParameter<edm::InputTag>("rhoIsoInputTag");
+   isoValInputTags_        = iConfig.getParameter<std::vector<edm::InputTag> >("isoValInputTags");
 
    genparticlesTag_  = iConfig.getUntrackedParameter<edm::InputTag>("genparticlesTag");
    pfcandidatesTag_  = iConfig.getUntrackedParameter<edm::InputTag>("pfcandidatesTag");
@@ -179,6 +223,7 @@ METSigNtuple::METSigNtuple(const edm::ParameterSet& iConfig)
    pfjetCorrectorL123_ = iConfig.getUntrackedParameter<std::string>("pfjetCorrectorL123");
 
    genjetsTag_   = iConfig.getUntrackedParameter<edm::InputTag>("genjetsTag");
+   genparticlesTag_   = iConfig.getUntrackedParameter<edm::InputTag>("genparticlesTag");
 
    verticesTag_  = iConfig.getUntrackedParameter<edm::InputTag>("verticesTag");
 
@@ -356,6 +401,30 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    MyWeight = 1.0;
    if( runOnMC_ ){
 
+      Handle<GenEventInfoProduct> gi;
+      iEvent.getByLabel("generator", gi);
+
+      edm::Handle< GenRunInfoProduct > genInfoProduct;
+      iEvent.getRun().getByLabel("generator", genInfoProduct );
+
+      geninfo.pid   = (int)gi->signalProcessID();
+      geninfo.pthat = gi->qScale();
+      geninfo.weight   = gi->weight();
+      geninfo.xsec  = genInfoProduct->crossSection();
+      geninfo.eff   = genInfoProduct->filterEfficiency();
+      geninfo.alphaQCD = gi->alphaQCD();
+      geninfo.alphaQED = gi->alphaQED();
+
+      if(gi->hasPDF()){
+         geninfo.scalePDF = gi->pdf()->scalePDF;
+         geninfo.id1        = gi->pdf()->id.first;
+         geninfo.id2        = gi->pdf()->id.second;
+         geninfo.x1      = gi->pdf()->x.first;
+         geninfo.x2      = gi->pdf()->x.second;
+         geninfo.xPDF1    = gi->pdf()->xPDF.first;
+         geninfo.xPDF2    = gi->pdf()->xPDF.second;
+      }
+
       Handle<std::vector<PileupSummaryInfo> > PupInfo;
       iEvent.getByLabel("addPileupInfo", PupInfo);
 
@@ -411,28 +480,31 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    reco::Vertex primaryVertex = vertices->at(0);
 
    // muons
-   edm::Handle<std::vector<reco::Muon> > muonsHandle;
+   edm::Handle<std::vector<reco::PFCandidate> > muonsHandle;
    iEvent.getByLabel(muonTag_, muonsHandle);
-   std::vector<reco::Muon> muons = *muonsHandle;
-   std::sort(muons.begin(), muons.end(), comparePT);
+   std::vector<reco::PFCandidate> muons = *muonsHandle;
+   std::sort(muons.begin(), muons.end(), compareMuPT);
    mu.size = muons.size(); 
 
    edm::Handle<reco::BeamSpot> beamSpotHandle;
    iEvent.getByLabel(InputTag("offlineBeamSpot"), beamSpotHandle);
+   const reco::BeamSpot &beamSpot = *(beamSpotHandle.product());
 
    int i=0;
-   for(std::vector<reco::Muon>::const_iterator it=muons.begin(); it!=muons.end(); it++, i++){
-      reco::Muon muon = *it;
+   for(std::vector<reco::PFCandidate>::const_iterator it=muons.begin(); it!=muons.end(); it++, i++){
+      if( !(it->muonRef().isNonnull() and it->muonRef().isAvailable()) ) continue;
+      reco::Muon muon = *(it->muonRef());
+      reco::PFCandidate pfmuon = *it;
 
-      mu.charge[i]   = muon.charge();
-      mu.pt[i]       = muon.pt();
-      mu.p[i]        = muon.p();
-      mu.e[i]        = muon.energy();
-      mu.phi[i]      = muon.phi();
-      mu.eta[i]      = muon.eta();
-      mu.px[i]       = muon.px();
-      mu.py[i]       = muon.py();
-      mu.pz[i]       = muon.pz();
+      mu.charge[i]   = pfmuon.charge();
+      mu.pt[i]       = pfmuon.pt();
+      mu.p[i]        = pfmuon.p();
+      mu.e[i]        = pfmuon.energy();
+      mu.phi[i]      = pfmuon.phi();
+      mu.eta[i]      = pfmuon.eta();
+      mu.px[i]       = pfmuon.px();
+      mu.py[i]       = pfmuon.py();
+      mu.pz[i]       = pfmuon.pz();
 
       mu.isGlobal[i]  = muon.isGlobalMuon(); 
       mu.isTracker[i] = muon.isTrackerMuon();
@@ -477,6 +549,82 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       mu.dr04chHad[i] = muon.pfIsolationR04().sumChargedHadronPt;
       mu.dr04neutHad[i] = muon.pfIsolationR04().sumNeutralHadronEt;
       mu.dr04photons[i] = muon.pfIsolationR04().sumPhotonEt;
+
+   }
+
+   // conversions
+   edm::Handle<reco::ConversionCollection> conversions_h;
+   iEvent.getByLabel(conversionsInputTag_, conversions_h);
+
+   // iso deposits
+   IsoDepositVals isoVals(isoValInputTags_.size());
+   for (size_t j = 0; j < isoValInputTags_.size(); ++j) {
+      iEvent.getByLabel(isoValInputTags_[j], isoVals[j]);
+   }
+
+   // vertices
+   edm::Handle<reco::VertexCollection> vtx_h;
+   iEvent.getByLabel(verticesTag_, vtx_h);
+
+   // rho for isolation
+   edm::Handle<double> rhoIso_h;
+   iEvent.getByLabel(rhoIsoInputTag, rhoIso_h);
+   double rhoIso = *(rhoIso_h.product());
+
+   //electrons
+   edm::Handle<std::vector<reco::PFCandidate> > electronsHandle;
+   iEvent.getByLabel(electronTag_, electronsHandle);
+   std::vector<reco::PFCandidate> electrons = *electronsHandle;
+   std::sort(electrons.begin(), electrons.end(), compareElecPT);
+   elec.size = electrons.size(); 
+   for(std::vector<reco::PFCandidate>::const_iterator it=electrons.begin(); it!=electrons.end(); it++, i++){
+      //if( !(it->gsfElectronRef().isNonnull() and it->gsfElectronRef().isAvailable()) )
+      //reco::GsfElectron gsfelectron = *(it->gsfElectronRef());
+
+      reco::PFCandidate pfelectron = *it;
+
+      elec.charge[i]   = pfelectron.charge();
+      elec.pt[i]       = pfelectron.pt();
+      elec.p[i]        = pfelectron.p();
+      elec.e[i]        = pfelectron.energy();
+      elec.phi[i]      = pfelectron.phi();
+      elec.eta[i]      = pfelectron.eta();
+      elec.px[i]       = pfelectron.px();
+      elec.py[i]       = pfelectron.py();
+      elec.pz[i]       = pfelectron.pz();
+
+      reco::SuperCluster elec_sc = *(it->superClusterRef());
+      if( it->superClusterRef().isNonnull() ){
+         elec.supercluster_eta[i] = elec_sc.eta();
+      }else{
+         elec.supercluster_eta[i] = -99;
+      }
+
+      double iso_ch=-1, iso_em=-1, iso_nh=-1;
+      bool veto=0, loose=0, medium=0, tight=0;
+
+      if( it->gsfElectronRef().isNonnull() and it->gsfElectronRef().isAvailable() ){
+         // get particle flow isolation
+         iso_ch = (*(isoVals)[0])[it->gsfElectronRef()];
+         iso_em = (*(isoVals)[1])[it->gsfElectronRef()];
+         iso_nh = (*(isoVals)[2])[it->gsfElectronRef()];
+         // working points
+         veto = EgammaCutBasedEleId::PassWP(EgammaCutBasedEleId::VETO, it->gsfElectronRef(),
+               conversions_h, beamSpot, vtx_h, iso_ch, iso_em, iso_nh, rhoIso);
+         loose = EgammaCutBasedEleId::PassWP(EgammaCutBasedEleId::LOOSE, it->gsfElectronRef(),
+               conversions_h, beamSpot, vtx_h, iso_ch, iso_em, iso_nh, rhoIso);
+         medium = EgammaCutBasedEleId::PassWP(EgammaCutBasedEleId::MEDIUM, it->gsfElectronRef(),
+               conversions_h, beamSpot, vtx_h, iso_ch, iso_em, iso_nh, rhoIso);
+         tight = EgammaCutBasedEleId::PassWP(EgammaCutBasedEleId::TIGHT, it->gsfElectronRef(),
+               conversions_h, beamSpot, vtx_h, iso_ch, iso_em, iso_nh, rhoIso);
+         // for 2011 WP70 trigger
+         // bool trigwp70 = EgammaCutBasedEleId::PassTriggerCuts(EgammaCutBasedEleId::TRIGGERWP70, ele);
+      }
+
+      elec.IDveto[i] = veto;
+      elec.IDloose[i] = loose;
+      elec.IDmedium[i] = medium;
+      elec.IDtight[i] = tight;
 
    }
 
@@ -593,9 +741,93 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          genjs.invEnergy[icand] = jet->invisibleEnergy();
          genjs.auxEnergy[icand] = jet->auxiliaryEnergy();
 
+         // get neutrino momentum sum
+         double nu_px = 0;
+         double nu_py = 0;
+         std::vector<const reco::GenParticle*> genConstituents = jet->getGenConstituents();
+         for( std::vector<const reco::GenParticle*>::const_iterator aCandidate
+               = genConstituents.begin();
+               aCandidate != genConstituents.end(); aCandidate++ ){
+            int aId = abs( (*aCandidate)->pdgId() );
+            if( aId == 11 or aId == 13 or aId == 15 ){
+               nu_px += (*aCandidate)->px();
+               nu_py += (*aCandidate)->py();
+            }
+         }
+         double nu_pt = sqrt( nu_px*nu_px + nu_py*nu_py );
+
+         genjs.nu_px[icand] = nu_px;
+         genjs.nu_py[icand] = nu_py;
+         genjs.nu_pt[icand] = nu_pt;
+
          icand++;
       }
       genjs.size = icand;
+
+      int icand_nu = 0;
+      int icand_mu = 0;
+      Handle<reco::GenParticleCollection> genParticles;
+      iEvent.getByLabel(genparticlesTag_, genParticles);
+      for(size_t i = 0; i < genParticles->size(); ++ i) {
+         const reco::GenParticle & p = (*genParticles)[i];
+         int id = p.pdgId();
+         int st = p.status();  
+         const reco::Candidate * mom = p.mother();
+         double pt = p.pt(), eta = p.eta(), phi = p.phi(), energy = p.energy();
+         double vx = p.vx(), vy = p.vy(), vz = p.vz();
+         int charge = p.charge();
+         int n = p.numberOfDaughters();
+         if( abs(id) == 24 and st == 3 ){
+            genW.id = id;
+            genW.pt = pt;
+            genW.eta = eta;
+            genW.phi = phi;
+            genW.energy = energy;
+            for(int j = 0; j < n; ++ j) {
+               const reco::Candidate * d = p.daughter( j );
+               int dauId = d->pdgId();
+               int aId = abs(d->pdgId());
+               if( d->status() == 3 and (aId == 11 or aId == 13 or aId == 15) ){
+                  genW.l_id = dauId;
+                  genW.l_pt = d->pt();
+                  genW.l_eta = d->eta();
+                  genW.l_phi = d->phi();
+                  genW.l_energy = d->energy();
+               }
+               if( d->status() == 3 and (aId == 12 or aId == 14 or aId == 16) ){
+                  genW.nu_id = dauId;
+                  genW.nu_pt = d->pt();
+                  genW.nu_eta = d->eta();
+                  genW.nu_phi = d->phi();
+                  genW.nu_energy = d->energy();
+               }
+            }
+         }
+
+         // mising energy
+         if( abs(id) == 12 or abs(id) == 14 or abs(id) == 16 ){
+            gennu.id[icand_nu] = id;
+            gennu.pt[icand_nu] = pt;
+            gennu.eta[icand_nu] = eta;
+            gennu.phi[icand_nu] = phi;
+            gennu.energy[icand_nu] = energy;
+            gennu.status[icand_nu] = st;
+            icand_nu++;
+         }
+         // muons
+         if( abs(id) == 13 ){
+            genmu.pt[icand_mu] = pt;
+            genmu.eta[icand_mu] = eta;
+            genmu.phi[icand_mu] = phi;
+            genmu.energy[icand_mu] = energy;
+            genmu.status[icand_mu] = st;
+            icand_mu++;
+         }
+
+      }
+      gennu.size = icand_nu;
+      genmu.size = icand_mu;
+
    }
 
 
@@ -605,6 +837,9 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    bool mu_checketa = true;
    bool mu_checkpt = true;
    bool mu_zpeak = true;
+
+   bool elec_primary = false;
+   bool elec_veto = false;
 
    for(int i=0; i < mu.size; i++){
       // tight muon selection
@@ -618,7 +853,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
                / mu.pt[i] < 0.12) ){
          mu_iso = false;
       }
-      if( !(fabs(mu.eta[i]) < 2.4) ) mu_checketa = false;
+      if( !(fabs(mu.eta[i]) < 2.1) ) mu_checketa = false;
       // pt cut
       if( !(mu.pt[i] > 20) ) mu_checkpt = false;
    }
@@ -628,13 +863,32 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       TLorentzVector mu2temp( mu.px[1], mu.py[1], mu.pz[1], mu.e[1] );
       mu_zpeak = (mu1temp+mu2temp).M() > 60 and (mu1temp+mu2temp).M() < 120;
    }
+   if( elec.size > 0 ){
+      elec_primary = elec.IDmedium[0] and elec.pt[0] > 30 and fabs(elec.eta[0]) < 2.5;
+   }
+   for(int i=1; i < elec.size; i++){
+      if( elec.IDloose[i] ) elec_veto = elec.IDloose[i] and elec.pt[i] > 20 and elec.eta[i] < 2.5;
+   }
+
    bool Zmumu_selection = (mu.size == 2) and mu_tight and mu_iso and mu_checketa
       and mu_checkpt and mu_zpeak;
+   bool Wenu_selection = elec_primary and !elec_veto;
 
    // FILL THE TREE
-   if( Zmumu_selection ){
-      results_tree -> Fill();
+   if( selectionChannel_ == "Zmumu" ){
+      if( Zmumu_selection ){
+         results_tree -> Fill();
+      }
    }
+   else if( selectionChannel_ == "Wenu" ){
+      if( Wenu_selection ){
+         results_tree -> Fill();
+      }
+   }
+   else{
+      std::cout << "Error: Selection channel unknown." << std::endl;
+   }
+
 }
 
 
@@ -652,6 +906,12 @@ METSigNtuple::beginJob()
    if(runOnMC_){
       results_tree -> Branch("puMyWeight", &MyWeight, "puMyWeight/F");
       results_tree -> Branch("puTnvtx", &T_nvertices, "puTnvtx/F");
+
+      results_tree -> Branch("gi_pid", &geninfo.pid, "gi_pid/I");
+      results_tree -> Branch("gi_pthat", &geninfo.pthat, "gi_pthat/F");
+      results_tree -> Branch("gi_weight", &geninfo.weight, "gi_weight/F");
+      results_tree -> Branch("gi_xsec", &geninfo.xsec, "gi_xsec/F");
+      results_tree -> Branch("gi_eff", &geninfo.eff, "gi_eff/F");
    }
    results_tree -> Branch("mu_size",   &mu.size, "mu_size/I");
    results_tree -> Branch("mu_charge",   mu.charge, "mu_charge[mu_size]/I");
@@ -691,6 +951,55 @@ METSigNtuple::beginJob()
    results_tree -> Branch("mu_dr04neutHad", mu.dr04neutHad, "mu_dr04neutHad[mu_size]/F");
    results_tree -> Branch("mu_dr04photons", mu.dr04photons, "mu_dr04photons[mu_size]/F");
 
+   results_tree -> Branch("elec_size",   &elec.size, "elec_size/I");
+   results_tree -> Branch("elec_charge",   elec.charge, "elec_charge[elec_size]/I");
+   results_tree -> Branch("elec_pt", elec.pt, "elec_pt[elec_size]/F");
+   results_tree -> Branch("elec_p", elec.p, "elec_p[elec_size]/F");
+   results_tree -> Branch("elec_e", elec.e, "elec_e[elec_size]/F");
+   results_tree -> Branch("elec_phi", elec.phi, "elec_phi[elec_size]/F");
+   results_tree -> Branch("elec_eta", elec.eta, "elec_eta[elec_size]/F");
+   results_tree -> Branch("elec_px", elec.px, "elec_px[elec_size]/F");
+   results_tree -> Branch("elec_py", elec.py, "elec_py[elec_size]/F");
+   results_tree -> Branch("elec_pz", elec.pz, "elec_pz[elec_size]/F");
+   results_tree -> Branch("elec_supercluster_eta", elec.supercluster_eta, "elec_supercluster_eta[elec_size]/F");
+   results_tree -> Branch("elec_IDveto", elec.IDveto, "elec_IDveto[elec_size]/O");
+   results_tree -> Branch("elec_IDloose", elec.IDloose, "elec_IDloose[elec_size]/O");
+   results_tree -> Branch("elec_IDmedium", elec.IDmedium, "elec_IDmedium[elec_size]/O");
+   results_tree -> Branch("elec_IDtight", elec.IDtight, "elec_IDtight[elec_size]/O");
+
+   if(runOnMC_){
+      results_tree -> Branch("genW_id", &genW.id, "genW_id/I");
+      results_tree -> Branch("genW_pt", &genW.pt, "genW_pt/F");
+      results_tree -> Branch("genW_eta", &genW.eta, "genW_eta/F");
+      results_tree -> Branch("genW_phi", &genW.phi, "genW_phi/F");
+      results_tree -> Branch("genW_energy", &genW.energy, "genW_energy/F");
+      results_tree -> Branch("genW_l_id", &genW.l_id, "genW_l_id/I");
+      results_tree -> Branch("genW_l_pt", &genW.l_pt, "genW_l_pt/F");
+      results_tree -> Branch("genW_l_eta", &genW.l_eta, "genW_l_eta/F");
+      results_tree -> Branch("genW_l_phi", &genW.l_phi, "genW_l_phi/F");
+      results_tree -> Branch("genW_l_energy", &genW.l_energy, "genW_l_energy/F");
+      results_tree -> Branch("genW_nu_id", &genW.nu_id, "genW_nu_id/I");
+      results_tree -> Branch("genW_nu_pt", &genW.nu_pt, "genW_nu_pt/F");
+      results_tree -> Branch("genW_nu_eta", &genW.nu_eta, "genW_nu_eta/F");
+      results_tree -> Branch("genW_nu_phi", &genW.nu_phi, "genW_nu_phi/F");
+      results_tree -> Branch("genW_nu_energy", &genW.nu_energy, "genW_nu_energy/F");
+
+      results_tree -> Branch("genNu_size", &gennu.size, "genNu_size/I");
+      results_tree -> Branch("genNu_id", gennu.id, "genNu_id[genNu_size]/I");
+      results_tree -> Branch("genNu_pt", gennu.pt, "genNu_pt[genNu_size]/F");
+      results_tree -> Branch("genNu_eta", gennu.eta, "genNu_eta[genNu_size]/F");
+      results_tree -> Branch("genNu_phi", gennu.phi, "genNu_phi[genNu_size]/F");
+      results_tree -> Branch("genNu_energy", gennu.energy, "genNu_energy[genNu_size]/F");
+      results_tree -> Branch("genNu_status", gennu.status, "genNu_status[genNu_size]/I");
+
+      results_tree -> Branch("genMu_size", &genmu.size, "genMu_size/I");
+      results_tree -> Branch("genMu_pt", genmu.pt, "genMu_pt[genMu_size]/F");
+      results_tree -> Branch("genMu_eta", genmu.eta, "genMu_eta[genMu_size]/F");
+      results_tree -> Branch("genMu_phi", genmu.phi, "genMu_phi[genMu_size]/F");
+      results_tree -> Branch("genMu_energy", genmu.energy, "genMu_energy[genMu_size]/F");
+      results_tree -> Branch("genMu_status", genmu.status, "genMu_status[genMu_size]/I");
+   }
+
    results_tree -> Branch("met_size", &metsSize_, "met_size/I");
    results_tree -> Branch("met_pt", mets.pt, "met_pt[met_size]/F");
    results_tree -> Branch("met_px", mets.px, "met_px[met_size]/F");
@@ -715,26 +1024,28 @@ METSigNtuple::beginJob()
    results_tree -> Branch("pfj_sigmapt",    pfjs.sigmapt,   "pfj_sigmapt[pfj_size]/F");
    results_tree -> Branch("pfj_sigmaphi",   pfjs.sigmaphi,  "pfj_sigmaphi[pfj_size]/F");
 
-   results_tree -> Branch("pfj_neutralHadronFraction", pfjs.neutralHadronFraction,
-         "pfj_neutralHadronFraction[pfj_size]/F");
-   results_tree -> Branch("pfj_neutralEmFraction", pfjs.neutralEmFraction,
-         "pfj_neutralEmFraction[pfj_size]/F");
-   results_tree -> Branch("pfj_chargedHadronFraction", pfjs.chargedHadronFraction,
-         "pfj_chargedHadronFraction[pfj_size]/F");
-   results_tree -> Branch("pfj_chargedHadronMultiplicity", pfjs.chargedHadronMultiplicity,
-         "pfj_chargedHadronMultiplicity[pfj_size]/F");
-   results_tree -> Branch("pfj_chargedEmFraction", pfjs.chargedEmFraction,
-         "pfj_chargedEmFraction[pfj_size]/F");
-   results_tree -> Branch("pfj_numConstituents", pfjs.nco, "pfj_numConstituents[pfj_size]/I");
+   if( saveJetInfo_ ){
+      results_tree -> Branch("pfj_neutralHadronFraction", pfjs.neutralHadronFraction,
+            "pfj_neutralHadronFraction[pfj_size]/F");
+      results_tree -> Branch("pfj_neutralEmFraction", pfjs.neutralEmFraction,
+            "pfj_neutralEmFraction[pfj_size]/F");
+      results_tree -> Branch("pfj_chargedHadronFraction", pfjs.chargedHadronFraction,
+            "pfj_chargedHadronFraction[pfj_size]/F");
+      results_tree -> Branch("pfj_chargedHadronMultiplicity", pfjs.chargedHadronMultiplicity,
+            "pfj_chargedHadronMultiplicity[pfj_size]/F");
+      results_tree -> Branch("pfj_chargedEmFraction", pfjs.chargedEmFraction,
+            "pfj_chargedEmFraction[pfj_size]/F");
+      results_tree -> Branch("pfj_numConstituents", pfjs.nco, "pfj_numConstituents[pfj_size]/I");
 
-   results_tree -> Branch("pfj_puid_mva", pfjs.puid_mva, "pfj_puid_mva[pfj_size]/F");
-   results_tree -> Branch("pfj_puid_idflag", pfjs.puid_idflag, "pfj_puid_idflag[pfj_size]/I");
-   results_tree -> Branch("pfj_puid_passloose", pfjs.puid_passloose,
-         "pfj_puid_passloose[pfj_size]/O");
-   results_tree -> Branch("pfj_puid_passmedium", pfjs.puid_passmedium,
-         "pfj_puid_passmedium[pfj_size]/O");
-   results_tree -> Branch("pfj_puid_passtight", pfjs.puid_passtight,
-         "pfj_puid_passtight[pfj_size]/O");
+      results_tree -> Branch("pfj_puid_mva", pfjs.puid_mva, "pfj_puid_mva[pfj_size]/F");
+      results_tree -> Branch("pfj_puid_idflag", pfjs.puid_idflag, "pfj_puid_idflag[pfj_size]/I");
+      results_tree -> Branch("pfj_puid_passloose", pfjs.puid_passloose,
+            "pfj_puid_passloose[pfj_size]/O");
+      results_tree -> Branch("pfj_puid_passmedium", pfjs.puid_passmedium,
+            "pfj_puid_passmedium[pfj_size]/O");
+      results_tree -> Branch("pfj_puid_passtight", pfjs.puid_passtight,
+            "pfj_puid_passtight[pfj_size]/O");
+   }
 
    if(runOnMC_){
       results_tree -> Branch("genj_size",  &genjs.size, "genj_size/I");
@@ -746,6 +1057,9 @@ METSigNtuple::beginJob()
       results_tree -> Branch("genj_hadEnergy",  genjs.hadEnergy, "genj_hadEnergy[genj_size]/F");
       results_tree -> Branch("genj_invEnergy",  genjs.invEnergy, "genj_invEnergy[genj_size]/F");
       results_tree -> Branch("genj_auxEnergy",  genjs.auxEnergy, "genj_auxEnergy[genj_size]/F");
+      results_tree -> Branch("genj_nu_px",  genjs.nu_px, "genj_nu_px[genj_size]/F");
+      results_tree -> Branch("genj_nu_py",  genjs.nu_py, "genj_nu_py[genj_size]/F");
+      results_tree -> Branch("genj_nu_pt",  genjs.nu_pt, "genj_nu_pt[genj_size]/F");
    }
 
    results_tree -> Branch("v_size",   &vtxs.size, "v_size/I");
@@ -769,8 +1083,46 @@ METSigNtuple::endJob()
 
 // ------------ method called when starting to processes a run  ------------
    void 
-METSigNtuple::beginRun(edm::Run const&, edm::EventSetup const&)
+METSigNtuple::beginRun(const edm::Run &iRun, const edm::EventSetup &iSetup)
 {
+   bool changed(true);
+   if (hltConfig_.init(iRun, iSetup, "HLT", changed)) {
+      if (changed) {
+         unsigned int prescales = hltConfig_.prescaleSize();
+         std::cout << "New run: trigger menu has changed..."<< std::endl;
+         std::vector<std::string> alltriggers=hltConfig_.triggerNames();
+
+         TriggerPathVersioned_.clear();
+         TriggerPathFilter_.clear();
+
+         for(int i=0; i<nTriggerPaths_; ++i){
+            bool triggerFound=false;
+            for(std::vector<std::string>::const_iterator it=alltriggers.begin(); it!=alltriggers.end() && !triggerFound; ++it){
+               TString fullname=*it;
+               if(fullname.BeginsWith(TriggerPath_[i])){
+                  std::cout << fullname << ":    ";
+                  string stname = string(fullname);
+                  TriggerPathVersioned_.push_back(stname);
+                  for(unsigned int j=0; j<prescales; ++j) std::cout <<  hltConfig_.prescaleValue(j, stname) << " ";
+                  std::cout << std::endl;
+
+                  std::vector<std::string> trigObjects = hltConfig_.moduleLabels(stname);
+                  int size = trigObjects.size();
+                  edm::InputTag inputTag(trigObjects[size-2], "", "HLT");
+                  TriggerPathFilter_.push_back(inputTag);
+                  triggerFound=true;
+               }
+            }
+            if(!triggerFound){
+               TriggerPathVersioned_.push_back(TriggerPath_[i]);  
+               TriggerPathFilter_.push_back(edm::InputTag("","",""));   
+               std::cout << TriggerPath_[i] << "*   Was not found in this menu" << std::endl;
+            }
+         }
+      }
+   } else {
+      LogError("Mtuple: ") << " HLT config extraction failure with process name HLT.";
+   }
 }
 
 // ------------ method called when ending the processing of a run  ------------

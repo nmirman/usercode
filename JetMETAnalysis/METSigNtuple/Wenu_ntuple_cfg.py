@@ -32,13 +32,8 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(options.maxE
 
 process.source = cms.Source("PoolSource",
       fileNames = cms.untracked.vstring(
-         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00037C53-AAD1-E111-B1BE-003048D45F38.root'
-         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00050BBE-D5D2-E111-BB65-001E67398534.root',
-         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00B16DF1-8FD1-E111-ADBB-F04DA23BCE4C.root',
-         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00D370C2-E3D2-E111-9C87-003048673F0A.root',
-         #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00FB6563-58D2-E111-AFCB-001E67397D73.root'
-         #'/store/data/Run2012A/DoubleMu/AOD/13Jul2012-v1/00000/0048B245-B9D2-E111-A8DC-0018F3D096BE.root'
-         '/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root'
+         '/store/mc/Summer12_DR53X/WJetsToLNu_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v2/0000/000869F4-59EE-E111-9BF6-003048D47752.root'
+         #'/store/data/Run2012A/SingleElectron/AOD/13Jul2012-v1/0000/001A2EB8-47D4-E111-B527-003048679070.root'
          )
       )
 
@@ -53,22 +48,33 @@ process.pfPileUp.Enable = False
 process.pfAllMuons.src="particleFlow"
 process.pfMuonsFromVertex.dzCut=9999
 process.pfNoMuon.bottomCollection   = "particleFlow"
-process.pfNoMuon.topCollection      = "pfSelectedMuons"
+#process.pfNoMuon.topCollection      = "pfSelectedMuons"
 process.pfJets.doAreaFastjet        = True
 process.pfJets.jetPtMin             = 0
-process.pfJets.src                  = "pfNoMuon"
+process.pfJets.src                  = "pfNoElectron"
+
+#process.pfAllNeutralHadrons.src = "particleFlow"
+#process.pfAllChargedHadrons.src = "particleFlow"
+#process.pfAllPhotons.src = "particleFlow"
+#process.pfAllChargedParticles.src = "particleFlow"
+#process.pfAllNeutralHadronsAndPhotons.src = "particleFlow"
+
+#process.pfSortByTypeSequence.remove( process.pfPileUpAllChargedParticles )
 
 process.load("RecoJets.JetProducers.ak5PFJets_cfi")
 process.ak5PFJets.doAreaFastjet = cms.bool(True)
 
 process.mypf2pat = cms.Sequence(
-      process.pfNoPileUpSequence * # pfPileUp enable is false
+      #process.pfSortByTypeSequence *
+      process.pfNoPileUpSequence *
       process.pfParticleSelectionSequence *
-      process.pfAllMuons * 
-      process.pfMuonsFromVertex *
-      process.pfSelectedMuons *
+      #process.pfAllMuons * 
+      #process.pfMuonsFromVertex *
+      #process.pfSelectedMuons *
+      process.pfMuonSequence *
       process.pfNoMuon *
-      process.pfElectronSequence * # don't project out electrons, just identify them.
+      process.pfElectronSequence *
+      process.pfNoElectron *
       process.pfJets
       )
 
@@ -127,16 +133,17 @@ from CommonTools.ParticleFlow.Tools.pfIsolation import setupPFElectronIso, setup
 process.eleIsoSequence = setupPFElectronIso(process, 'gsfElectrons')
 process.pfiso = cms.Sequence(process.pfParticleSelectionSequence + process.eleIsoSequence)
 
-trigger_paths = ["HLT_Mu17_Mu8_v"]
+#trigger_paths = ["HLT_Ele22_CaloIdL_CaloIsoVL_v"]
+trigger_paths = ["HLT_Ele27_WP80_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
 
 process.demo = cms.EDAnalyzer('METSigNtuple',
       runOnMC              = cms.untracked.bool(options.runOnMC),
       output_file          = cms.untracked.string(options.outputFile),
 
-      saveJetInfo          = cms.untracked.bool(True),
+      saveJetInfo          = cms.untracked.bool(False),
 
-      selectionChannel     = cms.untracked.string('Zmumu'),
+      selectionChannel     = cms.untracked.string('Wenu'),
 
       pfjetsTag            = cms.untracked.InputTag('pfJets'),
       pfjetCorrectorL1     = cms.untracked.string('ak5PFL1Fastjet'),
@@ -144,8 +151,8 @@ process.demo = cms.EDAnalyzer('METSigNtuple',
       jetResAlgo           = cms.string('AK5PF'),
       jetResEra            = cms.string('Spring10'),
 
-      muonTag              = cms.untracked.InputTag("pfSelectedMuons"),
-      electronTag          = cms.untracked.InputTag("pfSelectedElectrons"),
+      muonTag              = cms.untracked.InputTag("pfIsolatedMuons"),
+      electronTag          = cms.untracked.InputTag("pfIsolatedElectrons"),
 
       conversionsInputTag     = cms.InputTag("allConversions"),
       rhoIsoInputTag          = cms.InputTag("kt6PFJetsForIsolation", "rho"),
@@ -159,7 +166,7 @@ process.demo = cms.EDAnalyzer('METSigNtuple',
       genjetsTag           = cms.untracked.InputTag('ak5GenJets'),
 
       metsTag              = cms.untracked.VInputTag(metList),
-      genmetTag            = cms.untracked.InputTag('genMetTrue'),
+      genmetTag            = cms.untracked.InputTag('genMetCalo'),
 
       verticesTag          = cms.untracked.InputTag('offlinePrimaryVertices'),
       pileupTag            = cms.untracked.InputTag('addPileupInfo')
@@ -252,6 +259,7 @@ process.p = cms.Path(
       process.recoPuJetIdSequence *
       process.kt6PFJetsForIsolation *
       process.eleIsoSequence *
+      process.pfiso *
       process.demo
       )
 if options.runOnMC :

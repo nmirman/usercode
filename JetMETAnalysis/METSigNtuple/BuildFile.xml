@@ -13,6 +13,7 @@
 <use   name="RecoMET/METAlgorithms" />
 <use   name="JetMETCorrections/Objects" />
 <use   name="PhysicsTools/Utilities" />
+<use   name="EGamma/EGammaAnalysisTools" />
 <flags EDM_PLUGIN="1"/>
 <export>
    <lib name="1"/>

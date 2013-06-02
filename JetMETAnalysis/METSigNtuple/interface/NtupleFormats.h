@@ -1,10 +1,11 @@
 //maximum number of particles and jets saved.
 const Int_t NMuons=1000;
+const Int_t NElectrons=1000;
 const Int_t NParticles = 50000;
 const Int_t NJets = 10000;  //for Wenu study it is more than enough
 const Int_t NMETs = 100;
 const Int_t NVertices = 100;
-
+const Int_t NNeutrinos = 100;
 
 struct RecoMuon{
    int size;
@@ -43,6 +44,24 @@ struct RecoMuon{
    float dr04chHad[NMuons];
    float dr04neutHad[NMuons];
    float dr04photons[NMuons];
+};
+
+struct RecoElectron{
+   int size;
+   int charge[NElectrons];
+   float pt[NElectrons];
+   float p[NElectrons];
+   float e[NElectrons];
+   float phi[NElectrons];
+   float eta[NElectrons];
+   float px[NElectrons];
+   float py[NElectrons];
+   float pz[NElectrons];
+   float supercluster_eta[NElectrons];
+   bool IDveto[NElectrons];
+   bool IDloose[NElectrons];
+   bool IDmedium[NElectrons];
+   bool IDtight[NElectrons];
 };
 
 struct Vertices{
@@ -100,5 +119,61 @@ struct GenJets{
    float hadEnergy[NJets];
    float invEnergy[NJets];
    float auxEnergy[NJets];
+   float nu_px[NJets];
+   float nu_py[NJets];
+   float nu_pt[NJets];
 };
 
+struct GenW{
+   int id;
+   float pt;
+   float eta;
+   float phi;
+   float energy;
+   int l_id;
+   float l_pt;
+   float l_eta;
+   float l_phi;
+   float l_energy;
+   int nu_id;
+   float nu_pt;
+   float nu_eta;
+   float nu_phi;
+   float nu_energy;
+};
+
+struct GenNu{
+   int size;
+   int id[NNeutrinos];
+   float pt[NNeutrinos];
+   float eta[NNeutrinos];
+   float phi[NNeutrinos];
+   float energy[NNeutrinos];
+   int status[NNeutrinos];
+};
+
+struct GenMu{
+   int size;
+   float pt[NMuons];
+   float eta[NMuons];
+   float phi[NMuons];
+   float energy[NMuons];
+   int status[NMuons];
+};
+
+struct GenInfo {
+   Int_t pid;
+   float pthat;
+   float alphaQCD;
+   float alphaQED;
+   float scalePDF;
+   Int_t id1;
+   Int_t id2;
+   float x1;
+   float x2;
+   float xPDF1;
+   float xPDF2;
+   float weight;
+   float xsec;
+   float eff;
+};
