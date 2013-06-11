@@ -1,19 +1,25 @@
 import FWCore.ParameterSet.Config as cms
 
 pfMetSig = cms.EDProducer('METSignificance',
-    type			= cms.vstring("PFJet", "PFCandidate"),
-    src				= cms.VInputTag("ak5PFJets", "particleFlow"),
+      runOnMC = cms.untracked.bool(False),
 
-    jetResolAlgo		= cms.string('AK5PF'),
-    jetResolEra			= cms.string('Spring10'),
+      muonTag              = cms.untracked.InputTag('pfSelectedMuons'),
+      electronTag          = cms.untracked.InputTag('pfSelectedElectrons'),
+      metTag              = cms.untracked.InputTag('pfType1CorrectedMet'),
 
-    smearMet			= cms.bool(False),
-    scaleResolutions		= cms.bool(False),
-    smearJetPtThreshold		= cms.double(15.0),
-    resolJetPtThreshold		= cms.double(5.0),
-    resolJetPhThreshold		= cms.double(10.0),
-    jetParticleBoundaryPt	= cms.double(3.0),
-    clusterAllParticlesAfterEta = cms.double(3.0), 
-    scaleNeutralResols		= cms.double(1.8),
+      pfjetsTag            = cms.untracked.InputTag('pfJets'),
+      pfjetCorrectorL1     = cms.untracked.string('ak5PFL1Fastjet'),
+      pfjetCorrectorL123   = cms.untracked.string('ak5PFL1FastL2L3'),
+
+      jetResAlgo           = cms.string('AK5PF'),
+      jetResEra            = cms.string('Spring10'),
+
+      jetThreshold = cms.double(20),
+      parA1 = cms.double(1.39669),
+      parA2 = cms.double(1.32037),
+      parA3 = cms.double(1.32047),
+      parA4 = cms.double(1.38161),
+      parA5 = cms.double(1.51508),
+      parN1 = cms.double(0.0),
+      parS1 = cms.double(0.639158)
 )
-

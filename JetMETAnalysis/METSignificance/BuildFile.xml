@@ -1,10 +1,19 @@
 <use name="FWCore/Framework"/>
 <use name="FWCore/PluginManager"/>
 <use name="FWCore/ParameterSet"/>
-<use name="DataFormats/ParticleFlowCandidate"/>
-<use name="DataFormats/JetReco"/>
-<use name="DataFormats/METReco"/>
-<use name="CondFormats/JetMETObjects"/>
-<use name="RecoParticleFlow/PFClusterTools"/>
-<use name="JetMETCorrections/Objects" />
+<use name="DataFormats/Candidate" />
+<use name="DataFormats/EgammaCandidates" />
+<use name="DataFormats/METReco" />
+<use name="DataFormats/JetReco" />
+<use name="JetMETCorrections/Objects"/>
+<use name="RecoMET/METAlgorithms"/>
 <flags EDM_PLUGIN="1"/>
+<export>
+   <lib name="1"/>
+   <use name="DataFormats/Candidate" />
+   <use name="DataFormats/EgammaCandidates" />
+   <use name="DataFormats/METReco" />
+   <use name="DataFormats/JetReco" />
+   <use name="JetMETCorrections/Objects"/>
+   <use name="RecoMET/METAlgorithms"/>
+</export>
