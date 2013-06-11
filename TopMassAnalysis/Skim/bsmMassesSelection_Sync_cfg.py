@@ -12,7 +12,7 @@ options.setDefault( 'outputFile',
                   "BsmMassesSkim_Summer11_Sync.root" )
                   
 options.setDefault( 'inputFiles',
-                    'file:////uscms_data/d2/eggert/Summer11MCSync.root')
+                    '/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root')
 
 options.register( 'inputType',
                   'signalMC',
@@ -62,8 +62,8 @@ postfix = 'PFlow'
 
 inputfiles = options.inputFiles
 
-globalTagData = 'GR_R_42_V23'
-globalTagMC = 'START42_V17'
+globalTagData = 'FT_P_V43E_AN3'
+globalTagMC = 'START53_V7A'
 
 fwkReportEvery = 1000
 
@@ -255,10 +255,10 @@ applyPostfix( process, 'selectedPatJets', postfix ).cut  = jetCutPF
 # muon configuration
 applyPostfix( process, 'pfMuonsFromVertex'    , postfix ).vertices = cms.InputTag( 'goodOfflinePrimaryVertices' )
 applyPostfix( process, 'pfMuonsFromVertex'    , postfix ).d0Cut    = 0.02 # this is wrt the primary vertex
-applyPostfix( process, 'isoValMuonWithCharged', postfix ).deposits[0].deltaR = 0.3
-applyPostfix( process, 'isoValMuonWithNeutral', postfix ).deposits[0].deltaR = 0.3
-applyPostfix( process, 'isoValMuonWithPhotons', postfix ).deposits[0].deltaR = 0.3
-applyPostfix( process, 'pfIsolatedMuons'      , postfix ).combinedIsolationCut = 0.2
+#applyPostfix( process, 'isoValMuonWithCharged', postfix ).deposits[0].deltaR = 0.3
+#applyPostfix( process, 'isoValMuonWithNeutral', postfix ).deposits[0].deltaR = 0.3
+#applyPostfix( process, 'isoValMuonWithPhotons', postfix ).deposits[0].deltaR = 0.3
+#applyPostfix( process, 'pfIsolatedMuons'      , postfix ).combinedIsolationCut = 0.2
 
 applyPostfix( process, 'patMuons', postfix ).usePV      = True
 applyPostfix( process, 'patMuons', postfix ).embedTrack = True
@@ -268,10 +268,10 @@ applyPostfix( process, 'selectedPatMuons', postfix ).cut = muonCutPF
 # electron configuration
 applyPostfix( process, 'pfElectronsFromVertex'    , postfix ).vertices = cms.InputTag( 'goodOfflinePrimaryVertices' )
 applyPostfix( process, 'pfElectronsFromVertex'    , postfix ).d0Cut    = 0.04
-applyPostfix( process, 'isoValElectronWithCharged', postfix ).deposits[0].deltaR = 0.3
-applyPostfix( process, 'isoValElectronWithNeutral', postfix ).deposits[0].deltaR = 0.3
-applyPostfix( process, 'isoValElectronWithPhotons', postfix ).deposits[0].deltaR = 0.3
-applyPostfix( process, 'pfIsolatedElectrons'    , postfix ).combinedIsolationCut = 0.17
+#applyPostfix( process, 'isoValElectronWithCharged', postfix ).deposits[0].deltaR = 0.3
+#applyPostfix( process, 'isoValElectronWithNeutral', postfix ).deposits[0].deltaR = 0.3
+#applyPostfix( process, 'isoValElectronWithPhotons', postfix ).deposits[0].deltaR = 0.3
+#applyPostfix( process, 'pfIsolatedElectrons'    , postfix ).combinedIsolationCut = 0.17
 
 applyPostfix( process, 'patElectrons', postfix ).usePV      = False
 applyPostfix( process, 'patElectrons', postfix ).embedTrack = True
@@ -427,6 +427,17 @@ process.highMETFilteremu = cms.EDFilter("CandViewCountFilter",
 process.step4 = cms.Sequence(process.highMET*process.highMETFilter)
 process.step4emu = cms.Sequence(process.highMETemu*process.highMETFilteremu)
 
+# trigger filter
+trigger_paths = ["HLT_Mu17_Mu8_v"," HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v"," HLT_Mu17_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v7","HLT_Mu8_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v7"]
+trigger_pattern = [path+"*" for path in trigger_paths]
+
+from HLTrigger.HLTfilters.hltHighLevel_cfi import *
+process.triggerSelection = hltHighLevel.clone(
+      TriggerResultsTag = "TriggerResults::HLT",
+      HLTPaths = trigger_pattern,
+      throw=False
+      )
+
 # diagnostic stuff
 # process.TFileService = cms.Service("TFileService",
 #     fileName = cms.string('analyzeTopMuon.root')
@@ -449,9 +460,9 @@ if signalMC or TauMC or TopNonDilMC:
     process.p_ee += process.makeGenEvt
     process.p_emu += process.makeGenEvt
     process.p_mumu += process.makeGenEvt
-    process.p_ee += process.ttDilFilter
-    process.p_emu += process.ttDilFilter
-    process.p_mumu += process.ttDilFilter
+    #process.p_ee += process.ttDilFilter
+    #process.p_emu += process.ttDilFilter
+    #process.p_mumu += process.ttDilFilter
 
 if runOnMC :
     process.p_ee += process.totalKinematicsFilter
@@ -494,6 +505,9 @@ process.p_ee += process.step4
 process.p_mumu += process.step4
 process.p_emu += process.step4emu
 
+process.p_ee += process.triggerSelection
+process.p_mumu += process.triggerSelection
+process.p_emu += process.triggerSelection
 
 process.out.SelectEvents.SelectEvents.append( 'p_mumu' )
 process.out.SelectEvents.SelectEvents.append( 'p_emu' )
