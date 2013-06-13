@@ -13,7 +13,7 @@
 //
 // Original Author:  nathan mirman
 //         Created:  Thu May 30 16:39:52 CDT 2013
-// $Id$
+// $Id: METSignificance.cc,v 1.2 2013/06/11 05:20:45 nmirman Exp $
 //
 //
 
@@ -72,7 +72,6 @@ class METSignificance : public edm::EDProducer {
       edm::InputTag muonTag_;
       edm::InputTag electronTag_;
       edm::InputTag pfjetsTag_;
-      edm::InputTag metTag_;
 
       std::string pfjetCorrectorL1_;
       std::string pfjetCorrectorL123_;
@@ -108,7 +107,6 @@ METSignificance::METSignificance(const edm::ParameterSet& iConfig)
 {
    muonTag_    = iConfig.getUntrackedParameter<edm::InputTag>("muonTag");
    electronTag_ = iConfig.getUntrackedParameter<edm::InputTag>("electronTag");
-   metTag_ = iConfig.getUntrackedParameter<edm::InputTag>("metTag");
 
    pfjetsTag_    = iConfig.getUntrackedParameter<edm::InputTag>("pfjetsTag");
    pfjetCorrectorL1_  = iConfig.getUntrackedParameter<std::string>("pfjetCorrectorL1");
@@ -149,10 +147,10 @@ METSignificance::METSignificance(const edm::ParameterSet& iConfig)
    phiRes_ = new JetResolution(fphi.fullPath().c_str(),false);
 
    produces<double>("METSignificance");
-   produces<double>("METSigMatrix00");
-   produces<double>("METSigMatrix01");
-   produces<double>("METSigMatrix10");
-   produces<double>("METSigMatrix11");
+   produces<double>("CovarianceMatrix00");
+   produces<double>("CovarianceMatrix01");
+   produces<double>("CovarianceMatrix10");
+   produces<double>("CovarianceMatrix11");
 }
 
 
@@ -176,6 +174,17 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
    using namespace edm;
 
    //
+   // met and covariance
+   //
+   double met_px = 0;
+   double met_py = 0;
+
+   double cov_xx = 0;
+   double cov_xy = 0;
+   double cov_yy = 0;
+
+   
+   //
    // muons
    //
    Handle<std::vector<reco::PFCandidate> > muonsHandle;
@@ -184,6 +193,8 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
    for(std::vector<reco::PFCandidate>::const_iterator it=muons.begin(); it!=muons.end(); it++){
       if( !(it->muonRef().isNonnull() and it->muonRef().isAvailable()) ) continue;
       reco::PFCandidate pfmuon = *it;
+      met_px -= pfmuon.px();
+      met_py -= pfmuon.py();
    }
 
    //
@@ -194,20 +205,9 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
    std::vector<reco::PFCandidate> electrons = *electronsHandle;
    for(std::vector<reco::PFCandidate>::const_iterator it=electrons.begin(); it!=electrons.end(); it++){
       reco::PFCandidate pfelectron = *it;
+      met_px -= pfelectron.px();
+      met_py -= pfelectron.py();
    }
-
-   //
-   // met
-   //
-   edm::Handle<edm::View<reco::MET> > metHandle;
-   iEvent.getByLabel(metTag_, metHandle);
-   reco::MET metiter = (*metHandle)[0];
-   double met_px = metiter.px();
-   double met_py = metiter.py();
-
-   double cov_xx = 0;
-   double cov_xy = 0;
-   double cov_yy = 0;
 
    //
    // jets
@@ -245,6 +245,9 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
       double sigmaphi = fPhiEta->Eval(jptL123);
       delete fPtEta;
       delete fPhiEta;
+
+      met_px -= c*jptT1;
+      met_py -= s*jptT1;
 
       // split into high-pt and low-pt sector
       if( jptL123 > jetThreshold_ ){
@@ -294,19 +297,19 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
    (*significance) = sig;
 
    std::auto_ptr<double> sigmatrix_00 (new double);
-   (*sigmatrix_00) = ncov_xx;
+   (*sigmatrix_00) = cov_xx;
    std::auto_ptr<double> sigmatrix_01 (new double);
-   (*sigmatrix_01) = ncov_xy;
+   (*sigmatrix_01) = cov_xy;
    std::auto_ptr<double> sigmatrix_10 (new double);
-   (*sigmatrix_10) = ncov_xy;
+   (*sigmatrix_10) = cov_xy;
    std::auto_ptr<double> sigmatrix_11 (new double);
-   (*sigmatrix_11) = ncov_yy;
+   (*sigmatrix_11) = cov_yy;
 
    iEvent.put( significance, "METSignificance" );
-   iEvent.put( sigmatrix_00, "METSigMatrix00" );
-   iEvent.put( sigmatrix_01, "METSigMatrix01" );
-   iEvent.put( sigmatrix_10, "METSigMatrix10" );
-   iEvent.put( sigmatrix_11, "METSigMatrix11" );
+   iEvent.put( sigmatrix_00, "CovarianceMatrix00" );
+   iEvent.put( sigmatrix_01, "CovarianceMatrix01" );
+   iEvent.put( sigmatrix_10, "CovarianceMatrix10" );
+   iEvent.put( sigmatrix_11, "CovarianceMatrix11" );
 }
 
 // ------------ method called once each job just before starting event loop  ------------

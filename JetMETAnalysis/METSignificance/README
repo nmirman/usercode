@@ -1,23 +1,21 @@
 Usage information for MET Significance producer:
 
-1.  Copy the ### PF2PAT Configuration ### section from metsignificance_cfg.py to your python config.
-2.  Set the data/MC flag pfMetSig.runOnMC in your python config.  This will determine the parameters that are used to calculate the Significance.
-3.  In your python config, load the METsig producer and included it in your Path.
+1.  In your python config, load the METsig producer.
 
       process.load("JetMETAnalysis.METSignificance.metsignificance_cfi")
-      process.p = cms.Path(
-         process.pfMetSig
-      )
 
-4.  The Significance and the METsig covariance matrix can be accessed with the following InputTags:
+2.  Copy the ### PF2PAT Configuration ### section from metsignificance_cfg.py to your python config.
+3.  Set the data/MC flag isMC.  This is for the jet energy corrections and Significance parameters.
+4.  Include pfMetSig and mypf2pat in your path.
+5.  The Significance and the METsig covariance matrix can be accessed with the following InputTags:
 
-      metSig               = cms.untracked.InputTag('pfMetSig','METSignificance')
-      metSigMatrix00       = cms.untracked.InputTag('pfMetSig','METSigMatrix00')
-      metSigMatrix01       = cms.untracked.InputTag('pfMetSig','METSigMatrix01')
-      metSigMatrix10       = cms.untracked.InputTag('pfMetSig','METSigMatrix10')
-      metSigMatrix11       = cms.untracked.InputTag('pfMetSig','METSigMatrix11')
+      metSig                   = cms.untracked.InputTag('pfMetSig','METSignificance')
+      covarianceMatrix00       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix00')
+      covarianceMatrix01       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix01')
+      covarianceMatrix10       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix10')
+      covarianceMatrix11       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix11')
 
-5.  In your analysis code, access the InputTags via:
+6.  In your analysis code, access the InputTags via:
 
       edm::Handle<double> metsigHandle;
       iEvent.getByLabel(metSigTag_, metsigHandle);

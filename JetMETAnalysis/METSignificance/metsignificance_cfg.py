@@ -23,6 +23,13 @@ process.GlobalTag.globaltag = ( 'FT_P_V43E_AN3::All' )
 ###### PF2PAT Configuration ######
 ##################################
 
+# set data or MC
+isMC = True
+
+process.pfMetSig.runOnMC = cms.untracked.bool(isMC)
+if not isMC:
+   process.pfMetSig.pfjetCorrectorL123 = 'ak5PFL1FastL2L3Residual'
+
 process.load("CommonTools.ParticleFlow.PF2PAT_cff")
 process.pfPileUp.Enable = False
 
@@ -48,27 +55,14 @@ process.mypf2pat = cms.Sequence(
       process.pfJets
       )
 
-# met corrections and filters
-process.load("JetMETCorrections.Type1MET.pfMETCorrections_cff")
-
-process.mymet = cms.Sequence(
-      process.pfMET *
-      process.producePFMETCorrections
-      )
-
-process.pfMetSig.runOnMC = cms.untracked.bool(False)
-if not process.pfMetSig.runOnMC:
-   process.pfMetSig.pfjetCorrectorL123 = 'ak5PFL1FastL2L3Residual'
-
-process.p = cms.Path(
-      process.mypf2pat *
-      process.mymet *
-      process.pfMetSig
-)
-
 ##################################
 ###### PF2PAT Configuration ######
 ##################################
+
+process.p = cms.Path(
+      process.mypf2pat *
+      process.pfMetSig
+)
 
 process.out = cms.OutputModule("PoolOutputModule",
     fileName = cms.untracked.string('myOutputFile.root')
