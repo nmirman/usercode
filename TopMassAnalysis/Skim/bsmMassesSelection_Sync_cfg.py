@@ -15,10 +15,16 @@ options.setDefault( 'inputFiles',
                     '/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root')
 
 options.register( 'inputType',
-                  'signalMC',
+                  'data',
                   VarParsing.multiplicity.singleton,
                   VarParsing.varType.string,
                   'Type of input file. Options are data, signalMC, tauMC, topNonDilMC, backgroundMC.')
+
+options.register( 'globalTag',
+                  'START53_V7A',
+                  VarParsing.multiplicity.singleton,
+                  VarParsing.varType.string,
+                  'globalTag')
 
 options.register( 'wantSummary',
                   False,
@@ -62,8 +68,7 @@ postfix = 'PFlow'
 
 inputfiles = options.inputFiles
 
-globalTagData = 'FT_P_V43E_AN3'
-globalTagMC = 'START53_V7A'
+globalTag = options.globalTag
 
 fwkReportEvery = 1000
 
@@ -96,11 +101,7 @@ process.load("Configuration.StandardSequences.Geometry_cff")
 process.load("Configuration.StandardSequences.MagneticField_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 
-if runOnMC:
-  process.GlobalTag.globaltag = globalTagMC   + '::All'
-else:
-  process.GlobalTag.globaltag = globalTagData + '::All'
-
+process.GlobalTag.globaltag = options.globalTag + '::All'
 
 # input stuff
 process.source = cms.Source( "PoolSource"
