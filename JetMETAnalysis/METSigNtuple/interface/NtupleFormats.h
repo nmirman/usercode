@@ -107,6 +107,14 @@ struct PFJets{
    bool puid_passloose[NJets];
    bool puid_passmedium[NJets];
    bool puid_passtight[NJets];
+
+   float jetres_par0[NJets];
+   float jetres_par1[NJets];
+   float jetres_par2[NJets];
+   float jetres_par3[NJets];
+   float jetres_par4[NJets];
+   float jetres_par5[NJets];
+   float jetres_par6[NJets];
 };
 
 struct GenJets{

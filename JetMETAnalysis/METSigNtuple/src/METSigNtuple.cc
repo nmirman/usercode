@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.2 2013/03/21 19:10:55 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.3 2013/06/02 19:14:44 nmirman Exp $
 //
 //
 
@@ -150,6 +150,12 @@ class METSigNtuple : public edm::EDAnalyzer {
 
       edm::InputTag  verticesTag_;
 
+      edm::InputTag metSigTag_;
+      edm::InputTag metSigMatrix00_;
+      edm::InputTag metSigMatrix01_;
+      edm::InputTag metSigMatrix10_;
+      edm::InputTag metSigMatrix11_;
+
       HLTConfigProvider hltConfig_;
       JetResolution *ptRes_;
       JetResolution *phiRes_;
@@ -171,6 +177,12 @@ class METSigNtuple : public edm::EDAnalyzer {
 
       Vertices    vtxs;
 
+      float metsig;
+      float metsigmatrix00;
+      float metsigmatrix01;
+      float metsigmatrix10;
+      float metsigmatrix11;
+
       float MyWeight;
       float T_nvertices;
 
@@ -178,6 +190,8 @@ class METSigNtuple : public edm::EDAnalyzer {
       std::vector<edm::InputTag>    TriggerPathFilter_;    
       std::vector<std::string>      TriggerPathVersioned_;
       Int_t  nTriggerPaths_;
+
+      int metcount;
 };
 
 //
@@ -226,6 +240,12 @@ METSigNtuple::METSigNtuple(const edm::ParameterSet& iConfig)
    genparticlesTag_   = iConfig.getUntrackedParameter<edm::InputTag>("genparticlesTag");
 
    verticesTag_  = iConfig.getUntrackedParameter<edm::InputTag>("verticesTag");
+
+   metSigTag_ = iConfig.getUntrackedParameter<edm::InputTag>("metSig");
+   metSigMatrix00_ = iConfig.getUntrackedParameter<edm::InputTag>("metSigMatrix00");
+   metSigMatrix01_ = iConfig.getUntrackedParameter<edm::InputTag>("metSigMatrix01");
+   metSigMatrix10_ = iConfig.getUntrackedParameter<edm::InputTag>("metSigMatrix10");
+   metSigMatrix11_ = iConfig.getUntrackedParameter<edm::InputTag>("metSigMatrix11");
 
    string alg  = iConfig.getParameter<std::string>("jetResAlgo");     
    string era  = iConfig.getParameter<std::string>("jetResEra");     
@@ -695,7 +715,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       pfjs.eta[icand]  = jet->eta();
       pfjs.energy[icand] = jet->energy();
 
-      double jpt  = jet->pt();
+      double jpt  = jet->pt() * pfjs.l1l2l3[icand];
       double jeta = jet->eta();
 
       pfjs.neutralHadronFraction[icand] = jet->neutralHadronEnergyFraction();
@@ -708,6 +728,16 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       TF1* fPhiEta   = phiRes_-> parameterEta("sigma",jeta);
       pfjs.sigmapt[icand]     = fPtEta->Eval(jpt); 
       pfjs.sigmaphi[icand]    = fPhiEta->Eval(jpt);
+
+      TF1 fPtResol = *(ptRes_ -> resolutionEtaPt(jeta,jpt));
+      pfjs.jetres_par0[icand] = fPtResol.GetParameter(0);
+      pfjs.jetres_par1[icand] = fPtResol.GetParameter(1);
+      pfjs.jetres_par2[icand] = fPtResol.GetParameter(2);
+      pfjs.jetres_par3[icand] = fPtResol.GetParameter(3);
+      pfjs.jetres_par4[icand] = fPtResol.GetParameter(4);
+      pfjs.jetres_par5[icand] = fPtResol.GetParameter(5);
+      pfjs.jetres_par6[icand] = fPtResol.GetParameter(6);
+
       delete fPtEta;
       delete fPhiEta;
 
@@ -830,6 +860,19 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    }
 
+   // met significance
+   edm::Handle<double> metsigHandle;
+   iEvent.getByLabel(metSigTag_, metsigHandle);
+   metsig = *(metsigHandle.product());
+   
+   iEvent.getByLabel(metSigMatrix00_, metsigHandle);
+   metsigmatrix00 = *(metsigHandle.product());
+   iEvent.getByLabel(metSigMatrix01_, metsigHandle);
+   metsigmatrix01 = *(metsigHandle.product());
+   iEvent.getByLabel(metSigMatrix10_, metsigHandle);
+   metsigmatrix10 = *(metsigHandle.product());
+   iEvent.getByLabel(metSigMatrix11_, metsigHandle);
+   metsigmatrix11 = *(metsigHandle.product());
 
    // selection criteria
    bool mu_tight = true;
@@ -1023,6 +1066,13 @@ METSigNtuple::beginJob()
    results_tree -> Branch("pfj_energy",    pfjs.energy,   "pfj_eta[pfj_size]/F");
    results_tree -> Branch("pfj_sigmapt",    pfjs.sigmapt,   "pfj_sigmapt[pfj_size]/F");
    results_tree -> Branch("pfj_sigmaphi",   pfjs.sigmaphi,  "pfj_sigmaphi[pfj_size]/F");
+   results_tree -> Branch("pfj_jetres_par0",    pfjs.jetres_par0,   "pfj_jetres_par0[pfj_size]/F");
+   results_tree -> Branch("pfj_jetres_par1",    pfjs.jetres_par1,   "pfj_jetres_par1[pfj_size]/F");
+   results_tree -> Branch("pfj_jetres_par2",    pfjs.jetres_par2,   "pfj_jetres_par2[pfj_size]/F");
+   results_tree -> Branch("pfj_jetres_par3",    pfjs.jetres_par3,   "pfj_jetres_par3[pfj_size]/F");
+   results_tree -> Branch("pfj_jetres_par4",    pfjs.jetres_par4,   "pfj_jetres_par4[pfj_size]/F");
+   results_tree -> Branch("pfj_jetres_par5",    pfjs.jetres_par5,   "pfj_jetres_par5[pfj_size]/F");
+   results_tree -> Branch("pfj_jetres_par6",    pfjs.jetres_par6,   "pfj_jetres_par6[pfj_size]/F");
 
    if( saveJetInfo_ ){
       results_tree -> Branch("pfj_neutralHadronFraction", pfjs.neutralHadronFraction,
@@ -1070,6 +1120,12 @@ METSigNtuple::beginJob()
    results_tree -> Branch("v_y",       vtxs.y,   "v_y[v_size]/F");
    results_tree -> Branch("v_z",       vtxs.z,   "v_z[v_size]/F");
    results_tree -> Branch("v_Rho",     vtxs.Rho,   "v_Rho[v_size]/F");
+   
+   results_tree -> Branch("metsig", &metsig, "metsig/F");
+   results_tree -> Branch("metsigmatrix00", &metsigmatrix00, "metsigmatrix00/F");
+   results_tree -> Branch("metsigmatrix01", &metsigmatrix01, "metsigmatrix01/F");
+   results_tree -> Branch("metsigmatrix10", &metsigmatrix10, "metsigmatrix10/F");
+   results_tree -> Branch("metsigmatrix11", &metsigmatrix11, "metsigmatrix11/F");
 
 }
 
