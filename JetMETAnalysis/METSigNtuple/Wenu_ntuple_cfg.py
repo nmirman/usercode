@@ -77,6 +77,7 @@ process.mymet = cms.Sequence(
       )
 
 metList = []
+metList.append(cms.untracked.InputTag("pfMet", "", ""))
 metList.append(cms.untracked.InputTag("pfType1CorrectedMet", "", ""))
 
 # jet pileup id
@@ -244,8 +245,8 @@ process.p = cms.Path(
       process.recoPuJetIdSequence *
       process.kt6PFJetsForIsolation *
       process.eleIsoSequence *
-      process.pfMetSig *
       process.pfiso *
+      process.pfMetSig *
       process.demo
       )
 if options.runOnMC :

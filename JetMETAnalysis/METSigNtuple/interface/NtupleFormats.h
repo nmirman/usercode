@@ -1,9 +1,9 @@
 //maximum number of particles and jets saved.
-const Int_t NMuons=1000;
-const Int_t NElectrons=1000;
+const Int_t NMuons=100;
+const Int_t NElectrons=100;
 const Int_t NParticles = 50000;
 const Int_t NJets = 10000;  //for Wenu study it is more than enough
-const Int_t NMETs = 100;
+const Int_t NMETs = 10;
 const Int_t NVertices = 100;
 const Int_t NNeutrinos = 100;
 
@@ -83,6 +83,10 @@ struct METs{
    float pz[NMETs];
    float phi[NMETs];
    float sumEt[NMETs];
+   float dxx[NMETs];
+   float dxy[NMETs];
+   float dyy[NMETs];
+   float sig[NMETs];
 };
 
 struct PFJets{

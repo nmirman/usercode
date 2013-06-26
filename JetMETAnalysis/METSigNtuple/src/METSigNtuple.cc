@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.4 2013/06/25 16:13:39 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.5 2013/06/26 17:32:06 nmirman Exp $
 //
 //
 
@@ -652,13 +652,17 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    for(Int_t imet=0; imet<metsSize_ && imet<NMETs;imet++){
       edm::Handle<edm::View<reco::MET> > metHandle;
       iEvent.getByLabel(metsTag_[imet], metHandle);
-      reco::MET metiter = (*metHandle)[0];
+      reco::MET metiter = (*metHandle)[imet];
       mets.pt[imet]  = metiter.pt();
       mets.phi[imet] = metiter.phi();
       mets.px[imet]  = metiter.px();
       mets.py[imet]  = metiter.py();
       mets.pz[imet]  = metiter.pz();
       mets.sumEt[imet]  = metiter.sumEt();
+      mets.dxx[imet]   = metiter.getSignificanceMatrix()(0,0); 
+      mets.dxy[imet]   = metiter.getSignificanceMatrix()(0,1); 
+      mets.dyy[imet]   = metiter.getSignificanceMatrix()(1,1); 
+      mets.sig[imet]   = metiter.significance();
    }
    // gen met
    if(runOnMC_){
@@ -1050,6 +1054,10 @@ METSigNtuple::beginJob()
    results_tree -> Branch("met_pz", mets.pz, "met_pz[met_size]/F");
    results_tree -> Branch("met_phi", mets.phi, "met_phi[met_size]/F");
    results_tree -> Branch("met_sumEt", mets.sumEt, "met_sumEt[met_size]/F");
+   results_tree -> Branch("met_dxx", mets.dxx, "met_dxx[met_size]/F");
+   results_tree -> Branch("met_dxy", mets.dxy, "met_dxy[met_size]/F");
+   results_tree -> Branch("met_dyy", mets.dyy, "met_dyy[met_size]/F");
+   results_tree -> Branch("met_sig", mets.sig, "met_sig[met_size]/F");
 
    if(runOnMC_){
       results_tree -> Branch("genmet_et", &genmet_et, "genmet_et/F");
