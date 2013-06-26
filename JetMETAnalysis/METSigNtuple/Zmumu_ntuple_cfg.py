@@ -132,7 +132,7 @@ process.demo = cms.EDAnalyzer('METSigNtuple',
       jetResEra            = cms.string('Spring10'),
 
       muonTag              = cms.untracked.InputTag("pfSelectedMuons"),
-      electronTag          = cms.untracked.InputTag("pfSelectedElectrons"),
+      electronTag          = cms.untracked.InputTag("pfIsolatedElectrons"),
 
       conversionsInputTag     = cms.InputTag("allConversions"),
       rhoIsoInputTag          = cms.InputTag("kt6PFJetsForIsolation", "rho"),
@@ -252,6 +252,7 @@ process.p = cms.Path(
       process.kt6PFJetsForIsolation *
       process.eleIsoSequence *
       process.pfMetSig *
+      process.pfiso *
       process.demo
       )
 if options.runOnMC :

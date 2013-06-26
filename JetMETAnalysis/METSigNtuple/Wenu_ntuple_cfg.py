@@ -53,24 +53,12 @@ process.pfJets.doAreaFastjet        = True
 process.pfJets.jetPtMin             = 0
 process.pfJets.src                  = "pfNoElectron"
 
-#process.pfAllNeutralHadrons.src = "particleFlow"
-#process.pfAllChargedHadrons.src = "particleFlow"
-#process.pfAllPhotons.src = "particleFlow"
-#process.pfAllChargedParticles.src = "particleFlow"
-#process.pfAllNeutralHadronsAndPhotons.src = "particleFlow"
-
-#process.pfSortByTypeSequence.remove( process.pfPileUpAllChargedParticles )
-
 process.load("RecoJets.JetProducers.ak5PFJets_cfi")
 process.ak5PFJets.doAreaFastjet = cms.bool(True)
 
 process.mypf2pat = cms.Sequence(
-      #process.pfSortByTypeSequence *
       process.pfNoPileUpSequence *
       process.pfParticleSelectionSequence *
-      #process.pfAllMuons * 
-      #process.pfMuonsFromVertex *
-      #process.pfSelectedMuons *
       process.pfMuonSequence *
       process.pfNoMuon *
       process.pfElectronSequence *
@@ -80,30 +68,16 @@ process.mypf2pat = cms.Sequence(
 
 # met corrections and filters
 process.load("JetMETCorrections.Type1MET.pfMETCorrections_cff")
-process.load("JetMETCorrections.Type1MET.pfMETsysShiftCorrections_cfi")
-
-if options.runOnMC :
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runAvsNvtx_mc
-else :
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runAvsNvtx_data
-
-process.pfType1CorrectedMet.srcType1Corrections = cms.VInputTag(
-      cms.InputTag('pfJetMETcorr', 'type1') ,
-      cms.InputTag('pfMEtSysShiftCorr')  
-      )
-process.pfType1p2CorrectedMet.srcType1Corrections = cms.VInputTag(
-      cms.InputTag('pfJetMETcorr', 'type1') ,
-      cms.InputTag('pfMEtSysShiftCorr')       
-      )
+if not options.runOnMC:
+      process.pfJetMETcorr.jetCorrLabel = cms.string("ak5PFL1FastL2L3Residual")
 
 process.mymet = cms.Sequence(
       process.pfMET *
-      process.pfMEtSysShiftCorrSequence *
       process.producePFMETCorrections
       )
 
 metList = []
-metList.append(cms.untracked.InputTag("pfMet", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMet", "", ""))
 
 # jet pileup id
 from CMGTools.External.pujetidsequence_cff import puJetId, puJetMva
@@ -133,7 +107,6 @@ from CommonTools.ParticleFlow.Tools.pfIsolation import setupPFElectronIso, setup
 process.eleIsoSequence = setupPFElectronIso(process, 'gsfElectrons')
 process.pfiso = cms.Sequence(process.pfParticleSelectionSequence + process.eleIsoSequence)
 
-#trigger_paths = ["HLT_Ele22_CaloIdL_CaloIsoVL_v"]
 trigger_paths = ["HLT_Ele27_WP80_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
 
@@ -166,10 +139,16 @@ process.demo = cms.EDAnalyzer('METSigNtuple',
       genjetsTag           = cms.untracked.InputTag('ak5GenJets'),
 
       metsTag              = cms.untracked.VInputTag(metList),
-      genmetTag            = cms.untracked.InputTag('genMetCalo'),
+      genmetTag            = cms.untracked.InputTag('genMetTrue'),
 
       verticesTag          = cms.untracked.InputTag('offlinePrimaryVertices'),
-      pileupTag            = cms.untracked.InputTag('addPileupInfo')
+      pileupTag            = cms.untracked.InputTag('addPileupInfo'),
+
+      metSig               = cms.untracked.InputTag('pfMetSig','METSignificance'),
+      metSigMatrix00       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix00'),
+      metSigMatrix01       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix01'),
+      metSigMatrix10       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix10'),
+      metSigMatrix11       = cms.untracked.InputTag('pfMetSig','CovarianceMatrix11')
       )
 if not options.runOnMC:
    process.demo.pfjetCorrectorL123 = 'ak5PFL1FastL2L3Residual'
@@ -251,6 +230,12 @@ process.triggerSelection = hltHighLevel.clone(
       throw=False
       )
 
+# MET Significance producer
+process.load("JetMETAnalysis.METSignificance.metsignificance_cfi")
+process.pfMetSig.runOnMC = options.runOnMC
+if not options.runOnMC:
+         process.pfMetSig.pfjetCorrectorL123 = 'ak5PFL1FastL2L3Residual'
+
 process.p = cms.Path(
       process.triggerSelection *
       process.filtersSeq *
@@ -259,6 +244,7 @@ process.p = cms.Path(
       process.recoPuJetIdSequence *
       process.kt6PFJetsForIsolation *
       process.eleIsoSequence *
+      process.pfMetSig *
       process.pfiso *
       process.demo
       )
