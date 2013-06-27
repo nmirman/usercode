@@ -23,5 +23,5 @@ do
 done
 
 hadd ~/nobackup/Data.root ${filelist}
-#mv ~/nobackup/Data.root ${ntuple}
+mv ~/nobackup/Data.root ${ntuple}
 
