@@ -6,6 +6,7 @@ const Int_t NJets = 10000;  //for Wenu study it is more than enough
 const Int_t NMETs = 10;
 const Int_t NVertices = 100;
 const Int_t NNeutrinos = 100;
+const Int_t NBTags = 10000;
 
 struct RecoMuon{
    int size;
@@ -134,6 +135,15 @@ struct GenJets{
    float nu_px[NJets];
    float nu_py[NJets];
    float nu_pt[NJets];
+};
+
+struct BTags{
+   Int_t size;
+   float pt[NBTags];
+   float phi[NBTags];
+   float eta[NBTags];
+   float energy[NBTags];
+   float discriminator[NBTags];
 };
 
 struct GenW{

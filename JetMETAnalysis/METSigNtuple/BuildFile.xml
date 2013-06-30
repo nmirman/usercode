@@ -15,6 +15,7 @@
 <use   name="PhysicsTools/Utilities" />
 <use   name="EGamma/EGammaAnalysisTools" />
 <use   name="JetMETAnalysis/METSignificance" />
+<use   name="DataFormats/BTauReco" /> 
 <flags EDM_PLUGIN="1"/>
 <export>
    <lib name="1"/>

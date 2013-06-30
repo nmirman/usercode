@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.5 2013/06/26 17:32:06 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.6 2013/06/26 20:04:21 nmirman Exp $
 //
 //
 
@@ -68,6 +68,8 @@ Implementation:
 #include "DataFormats/RecoCandidate/interface/IsoDeposit.h"
 #include "CommonTools/ParticleFlow/test/PFIsoReaderDemo.h"
 #include "EGamma/EGammaAnalysisTools/interface/EGammaCutBasedEleId.h"
+
+#include "DataFormats/BTauReco/interface/JetTag.h"
 
 #include "JetMETAnalysis/METSigNtuple/interface/NtupleFormats.h"
 
@@ -148,6 +150,8 @@ class METSigNtuple : public edm::EDAnalyzer {
 
       edm::InputTag genjetsTag_;
 
+      Bool_t    saveBTags_;
+
       edm::InputTag  verticesTag_;
 
       edm::InputTag metSigTag_;
@@ -174,6 +178,7 @@ class METSigNtuple : public edm::EDAnalyzer {
       GenNu       gennu;
       GenMu       genmu;
       GenInfo     geninfo;
+      BTags       btags;
 
       Vertices    vtxs;
 
@@ -218,6 +223,7 @@ METSigNtuple::METSigNtuple(const edm::ParameterSet& iConfig)
    selectionChannel_ = iConfig.getUntrackedParameter<std::string>("selectionChannel");
 
    saveJetInfo_      = iConfig.getUntrackedParameter<Bool_t>("saveJetInfo");
+   saveBTags_      = iConfig.getUntrackedParameter<Bool_t>("saveBTags");
 
    muonTag_    = iConfig.getUntrackedParameter<edm::InputTag>("muonTag");
    electronTag_ = iConfig.getUntrackedParameter<edm::InputTag>("electronTag");
@@ -652,7 +658,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    for(Int_t imet=0; imet<metsSize_ && imet<NMETs;imet++){
       edm::Handle<edm::View<reco::MET> > metHandle;
       iEvent.getByLabel(metsTag_[imet], metHandle);
-      reco::MET metiter = (*metHandle)[imet];
+      reco::MET metiter = (*metHandle)[0];
       mets.pt[imet]  = metiter.pt();
       mets.phi[imet] = metiter.phi();
       mets.px[imet]  = metiter.px();
@@ -698,10 +704,10 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    // pileup jet id
    Handle<ValueMap<float> > puJetIdMVA;
-   iEvent.getByLabel(edm::InputTag("recoPuJetMva","fullDiscriminant"), puJetIdMVA);
+   iEvent.getByLabel(edm::InputTag("recoPuJetMva","full53xDiscriminant"), puJetIdMVA);
 
    Handle<ValueMap<int> > puJetIdFlag;
-   iEvent.getByLabel(edm::InputTag("recoPuJetMva","fullId"), puJetIdFlag);
+   iEvent.getByLabel(edm::InputTag("recoPuJetMva","full53xId"), puJetIdFlag);
 
    // jet energy corrections
    const JetCorrector* corrector  = JetCorrector::getJetCorrector (pfjetCorrectorL1_, iSetup);
@@ -757,6 +763,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       icand++;
    }
    pfjs.size = icand;
+
    // genjets
    if(runOnMC_){
       Handle<reco::GenJetCollection> genjets;
@@ -878,6 +885,36 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    iEvent.getByLabel(metSigMatrix11_, metsigHandle);
    metsigmatrix11 = *(metsigHandle.product());
 
+   // b tagging
+   for(Int_t i=0; i<saveBTags_; i++){
+      btags.size = 0;
+      btags.pt[i] = 0;
+      btags.eta[i] = 0;
+      btags.phi[i] = 0;
+      btags.energy[i] = 0;
+      btags.discriminator[i] = -100;
+   }
+
+   if( saveBTags_ ){
+      edm::Handle<reco::JetTagCollection> bTagHandle;
+      iEvent.getByLabel("combinedSecondaryVertexBJetTags", bTagHandle);
+      const reco::JetTagCollection & bTags = *(bTagHandle.product());
+
+      btags.size = bTags.size();
+
+      for (int i = 0; i < int(bTags.size()); ++i) {
+
+         btags.pt[i] = bTags[i].first->pt();
+         btags.eta[i] = bTags[i].first->eta();
+         btags.phi[i] = bTags[i].first->phi();
+         btags.energy[i] = bTags[i].first->energy();
+
+         btags.discriminator[i] = bTags[i].second;
+
+      }
+   }
+   
+
    // selection criteria
    bool mu_tight = true;
    bool mu_iso = true;
@@ -931,6 +968,9 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       if( Wenu_selection ){
          results_tree -> Fill();
       }
+   }
+   else if( selectionChannel_ == "Ttbar" ){
+      results_tree->Fill();
    }
    else{
       std::cout << "Error: Selection channel unknown." << std::endl;
@@ -1071,7 +1111,7 @@ METSigNtuple::beginJob()
    results_tree -> Branch("pfj_pt",     pfjs.pt,    "pfj_pt[pfj_size]/F");
    results_tree -> Branch("pfj_phi",    pfjs.phi,   "pfj_phi[pfj_size]/F");
    results_tree -> Branch("pfj_eta",    pfjs.eta,   "pfj_eta[pfj_size]/F");
-   results_tree -> Branch("pfj_energy",    pfjs.energy,   "pfj_eta[pfj_size]/F");
+   results_tree -> Branch("pfj_energy",    pfjs.energy,   "pfj_energy[pfj_size]/F");
    results_tree -> Branch("pfj_sigmapt",    pfjs.sigmapt,   "pfj_sigmapt[pfj_size]/F");
    results_tree -> Branch("pfj_sigmaphi",   pfjs.sigmaphi,  "pfj_sigmaphi[pfj_size]/F");
    results_tree -> Branch("pfj_jetres_par0",    pfjs.jetres_par0,   "pfj_jetres_par0[pfj_size]/F");
@@ -1103,6 +1143,15 @@ METSigNtuple::beginJob()
             "pfj_puid_passmedium[pfj_size]/O");
       results_tree -> Branch("pfj_puid_passtight", pfjs.puid_passtight,
             "pfj_puid_passtight[pfj_size]/O");
+   }
+
+   if( saveBTags_ ){
+      results_tree -> Branch("btags_size",   &btags.size,    "btags_size/I");
+      results_tree -> Branch("btags_pt",     btags.pt,    "btags_pt[btags_size]/F");
+      results_tree -> Branch("btags_phi",    btags.phi,   "btags_phi[btags_size]/F");
+      results_tree -> Branch("btags_eta",    btags.eta,   "btags_eta[btags_size]/F");
+      results_tree -> Branch("btags_energy",    btags.energy,   "btags_energy[btags_size]/F");
+      results_tree -> Branch("btags_discriminator",    btags.discriminator,   "btags_discriminator[btags_size]/F");
    }
 
    if(runOnMC_){
