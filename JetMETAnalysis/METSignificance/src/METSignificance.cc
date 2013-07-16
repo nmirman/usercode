@@ -13,7 +13,7 @@
 //
 // Original Author:  nathan mirman
 //         Created:  Thu May 30 16:39:52 CDT 2013
-// $Id: METSignificance.cc,v 1.2 2013/06/11 05:20:45 nmirman Exp $
+// $Id: METSignificance.cc,v 1.3 2013/06/13 15:02:11 nmirman Exp $
 //
 //
 
@@ -239,8 +239,9 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
       double jptT1 = (jpt*jcorrl123 > 10) ? jpt*(jcorrl123+1-jcorrl1) : jpt;
 
       // jet energy resolutions
-      TF1* fPtEta    = ptRes_ -> parameterEta("sigma",jeta);
-      TF1* fPhiEta   = phiRes_-> parameterEta("sigma",jeta);
+      double jeta_res = fabs(jeta) < 9.9 ? jeta : 9.89; // JetResolutions defined for |eta|<9.9
+      TF1* fPtEta    = ptRes_ -> parameterEta("sigma",jeta_res);
+      TF1* fPhiEta   = phiRes_-> parameterEta("sigma",jeta_res);
       double sigmapt = fPtEta->Eval(jptL123);
       double sigmaphi = fPhiEta->Eval(jptL123);
       delete fPtEta;
