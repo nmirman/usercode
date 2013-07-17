@@ -13,7 +13,7 @@
 //
 // Original Author:  nathan mirman
 //         Created:  Thu May 30 16:39:52 CDT 2013
-// $Id: METSignificance.cc,v 1.4 2013/07/16 21:12:45 nmirman Exp $
+// $Id: METSignificance.cc,v 1.5 2013/07/16 22:07:08 nmirman Exp $
 //
 //
 
@@ -238,22 +238,22 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
       double jptL123 = (jpt*jcorrl123 > 10) ? jpt*jcorrl123 : jpt;
       double jptT1 = (jpt*jcorrl123 > 10) ? jpt*(jcorrl123+1-jcorrl1) : jpt;
 
-      // jet energy resolutions
-      double jeta_res = (fabs(jeta) < 9.9) ? jeta : 9.89; // JetResolutions defined for |eta|<9.9
-      TF1* fPtEta    = ptRes_ -> parameterEta("sigma",jeta_res);
-      TF1* fPhiEta   = phiRes_-> parameterEta("sigma",jeta_res);
-      double sigmapt = fPtEta->Eval(jptL123);
-      double sigmaphi = fPhiEta->Eval(jptL123);
-      delete fPtEta;
-      delete fPhiEta;
-
       met_px -= c*jptT1;
       met_py -= s*jptT1;
 
       // split into high-pt and low-pt sector
       if( jptL123 > jetThreshold_ ){
          // high-pt jets enter into the covariance matrix via JER
-         
+
+	// jet energy resolutions
+	double jeta_res = (fabs(jeta) < 9.9) ? jeta : 9.89; // JetResolutions defined for |eta|<9.9
+	TF1* fPtEta    = ptRes_ -> parameterEta("sigma",jeta_res);
+	TF1* fPhiEta   = phiRes_-> parameterEta("sigma",jeta_res);
+	double sigmapt = fPtEta->Eval(jptL123);
+	double sigmaphi = fPhiEta->Eval(jptL123);
+	delete fPtEta;
+	delete fPhiEta;
+               
          double scale = 0;
          if(feta<0.5) scale = parA1;
          else if(feta<1.1) scale = parA2;
