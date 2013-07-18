@@ -13,7 +13,7 @@
 //
 // Original Author:  Nicholas Eggert
 //         Created:  Tue Sep 20 15:51:21 CDT 2011
-// $Id: MakeNtuple.cc,v 1.1 2013/06/10 15:53:10 nmirman Exp $
+// $Id: MakeNtuple.cc,v 1.1 2013/06/20 18:59:31 nmirman Exp $
 //
 //
 
@@ -158,6 +158,9 @@ class MakeNtuple : public edm::EDAnalyzer {
       int jet1ParentIdGEN, jet2ParentIdGEN;
       int vertices, numBJets;
       int run, lumi, event;
+      int jetcount;
+      double jet1Vz, jet2Vz;
+      //double jet1VzCovariance, jet2VzCovariance;
 
 };
 
@@ -236,6 +239,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   negTaggedJets_.clear();
   goodLeptons_.clear();
 
+  double primary_vertex_z = 0;
   // Retrieve number of vertices from PileUpInfo
   if (runOnMC_) {
 	  edm::Handle<edm::View<PileupSummaryInfo> > PupInfo;
@@ -251,14 +255,18 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   	edm::Handle<std::vector<reco::Vertex> > goodVertices;
 		iEvent.getByLabel("goodOfflinePrimaryVertices", "", goodVertices);
 		vertices = goodVertices->size();
+		reco::Vertex primary_vertex = goodVertices->at(0);
+                primary_vertex_z = primary_vertex.z();
   }
 
   // Get jets that pass the b tag cut
   edm::Handle<edm::View<pat::Jet> > jets;
   iEvent.getByLabel(jetTag_,jets);
+  jetcount = 0;
   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
     if (jet->bDiscriminator(bTagger_) > bTagCut_) {
       taggedJets_.push_back(*jet);
+      jetcount++;
     }
   }
 
@@ -266,6 +274,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
     if (jet->bDiscriminator(bTagger_) < negTagCut_) {
       negTaggedJets_.push_back(*jet);
+      jetcount++;
     }
   }
 
@@ -291,6 +300,10 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   }
   else return;
 
+  jet1Vz = jet1.vz()-primary_vertex_z;
+  jet2Vz = jet2.vz()-primary_vertex_z;
+  //jet1VzCovariance =jet1.vertexCovariance(2,2);
+  //jet2VzCovariance =jet2.vertexCovariance(2,2);
 
   pat::Jet jet1Uncor = jet1.correctedJet(0); // 0 = Uncorrected
   pat::Jet jet2Uncor = jet2.correctedJet(0);
@@ -531,6 +544,11 @@ MakeNtuple::beginJob()
   treeData->Branch("PDG2", &PDG2);
   treeData->Branch("vertices", &vertices);
   treeData->Branch("numBJets", &numBJets);
+  treeData->Branch("jetnumber",&jetcount);
+  treeData->Branch("jet1Vz",&jet1Vz);
+  treeData->Branch("jet2Vz",&jet2Vz);
+  //treeData->Branch("jet1VzCovariance",&jet1VzCovariance);
+  //treeData->Branch("jet2VzCovariance",&jet2VzCovariance);
 
   if (runOnMC_) {
 	  treeData->Branch("jet1GenId", &jet1GenId);

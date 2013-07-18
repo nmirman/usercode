@@ -1,7 +1,7 @@
 #!/bin/bash
 
-crabout="/eos/uscms/store/user/nmirman/CRABjobs/crab_ZmumuNtuples_mc_20130427"
-ntuple="/eos/uscms/store/user/nmirman/Ntuples/Zmumu/20130427/"
+crabout="/eos/uscms/store/user/xguo93/CRABjobs/crab_TopMassNtuple_mc_20130625"
+ntuple="/eos/uscms/store/user/xguo93/Ntuples/20130625/"
 
 for dir in `ls ${crabout}`
 do
