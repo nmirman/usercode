@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.6 2013/06/26 20:04:21 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.7 2013/06/30 22:04:13 nmirman Exp $
 //
 //
 
@@ -725,7 +725,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       pfjs.eta[icand]  = jet->eta();
       pfjs.energy[icand] = jet->energy();
 
-      double jpt  = jet->pt() * pfjs.l1l2l3[icand];
+      double jpt  = ( jet->pt()*pfjs.l1l2l3[icand] > 10 ) ? jet->pt()*pfjs.l1l2l3[icand] : jet->pt();
       double jeta = jet->eta();
 
       pfjs.neutralHadronFraction[icand] = jet->neutralHadronEnergyFraction();
@@ -895,6 +895,9 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       btags.discriminator[i] = -100;
    }
 
+   std::vector<double> goodbtag_eta;
+   std::vector<double> goodbtag_phi;
+
    if( saveBTags_ ){
       edm::Handle<reco::JetTagCollection> bTagHandle;
       iEvent.getByLabel("combinedSecondaryVertexBJetTags", bTagHandle);
@@ -910,6 +913,11 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          btags.energy[i] = bTags[i].first->energy();
 
          btags.discriminator[i] = bTags[i].second;
+
+         if( btags.discriminator[i] > 0.898){
+            goodbtag_eta.push_back( btags.eta[i] );
+            goodbtag_phi.push_back( btags.phi[i] );
+         }
 
       }
    }
@@ -953,10 +961,57 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    for(int i=1; i < elec.size; i++){
       if( elec.IDloose[i] ) elec_veto = elec.IDloose[i] and elec.pt[i] > 20 and elec.eta[i] < 2.5;
    }
+   // loose jetID
+   int numjets_pt400 = 0;
+   int numjets_pt200 = 0;
+   int numjets_pt60 = 0;
+   int numjets_pt50 = 0;
+   int numjets_pt45 = 0;
+   int numbtags = 0;
+   for( int i=0; i < pfjs.size; i++ ){
+      int nco = pfjs.nco[i];
+      double nhf = pfjs.neutralHadronFraction[i];
+      double nef = pfjs.neutralEmFraction[i];
+      double chf = pfjs.chargedHadronFraction[i];
+      double cef = pfjs.chargedEmFraction[i];
+      int nch = pfjs.chargedHadronMultiplicity[i];
+
+      bool passID = false;
+      if( nco>1 and nhf<0.99 and nef<0.99 ){
+         if( fabs(pfjs.eta[i]) < 2.4 ){
+            if( cef<0.99 and chf>0 and nch>0 ) passID = true;
+         }else{
+            passID = true;
+         }
+      }
+
+      double jetpt_corr = (pfjs.pt[i]*pfjs.l1l2l3[i] > 10) ? pfjs.pt[i]*pfjs.l1l2l3[i] : pfjs.pt[i];
+
+      if( jetpt_corr > 400 ) numjets_pt400++;
+      if( jetpt_corr > 200 ) numjets_pt200++;
+      if( jetpt_corr > 60 ) numjets_pt60++;
+      if( jetpt_corr > 50 ) numjets_pt50++;
+      if( jetpt_corr > 45 ) numjets_pt45++;
+
+      // match to b-tag
+      for(int j=0; j < int(goodbtag_eta.size()); j++ ){
+         double dphi = TVector2::Phi_mpi_pi( pfjs.phi[i] - goodbtag_phi[j] ); 
+         double deta = pfjs.eta[i] - goodbtag_eta[j];
+         double dRtemp = sqrt( deta*deta + dphi*dphi );
+         if( dRtemp < 0.3 and passID and jetpt_corr > 45 ){
+            numbtags++;
+            continue;
+         }
+      }
+
+   }
 
    bool Zmumu_selection = (mu.size == 2) and mu_tight and mu_iso and mu_checketa
       and mu_checkpt and mu_zpeak;
    bool Wenu_selection = elec_primary and !elec_veto;
+   bool Ttbar_selection = (numjets_pt60 >= 4) and (numjets_pt50 >= 5) and (numjets_pt45 >= 6)
+      and (numbtags > 1);
+   bool Dijet_selection = (numjets_pt400 >= 1) and (numjets_pt200 >= 2);
 
    // FILL THE TREE
    if( selectionChannel_ == "Zmumu" ){
@@ -970,7 +1025,14 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       }
    }
    else if( selectionChannel_ == "Ttbar" ){
-      results_tree->Fill();
+      if( Ttbar_selection ){
+         results_tree->Fill();
+      }
+   }
+   else if( selectionChannel_ == "Dijet" ){
+      if( Dijet_selection ){
+         results_tree->Fill();
+      }
    }
    else{
       std::cout << "Error: Selection channel unknown." << std::endl;

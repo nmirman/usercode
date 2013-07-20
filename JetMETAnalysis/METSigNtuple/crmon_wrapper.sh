@@ -8,6 +8,7 @@ crabdir[2]="crab_WenuNtuples_data_${date}"
 crabdir[3]="crab_WenuNtuples_mc_${date}"
 crabdir[4]="crab_WenuNtuples_data_split_20130626"
 crabdir[5]="crab_TtbarNtuples_mc_20130630"
+crabdir[6]="crab_WenuNtuples_mc_qcd_20130626"
 
 count=0
 end_job=""

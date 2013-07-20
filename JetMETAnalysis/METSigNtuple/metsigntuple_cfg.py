@@ -136,7 +136,9 @@ if options.channel == 'Zmumu':
 if options.channel == 'Wenu':
    trigger_paths = ["HLT_Ele27_WP80_v"]
 if options.channel == 'Ttbar':
-   trigger_paths = ["HLT_DiCentralPFJet30_PFMET80_BTagCSV07_v","HLT_PFMET150_v"]
+   trigger_paths = ["HLT_SixJet45_v"]
+if options.channel == 'Dijet':
+   trigger_paths = ["HLT_PFJet320_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
 
 process.demo = cms.EDAnalyzer('METSigNtuple',
@@ -193,6 +195,11 @@ if options.channel == 'Wenu':
 if options.channel == 'Ttbar':
    process.demo.saveJetInfo = cms.untracked.bool(True)
    process.demo.selectionChannel = cms.untracked.string('Ttbar')
+   process.demo.muonTag = cms.untracked.InputTag("pfIsolatedMuons")
+   process.demo.saveBTags = cms.untracked.bool(True)
+if options.channel == 'Dijet':
+   process.demo.saveJetInfo = cms.untracked.bool(True)
+   process.demo.selectionChannel = cms.untracked.string('Dijet')
    process.demo.muonTag = cms.untracked.InputTag("pfIsolatedMuons")
    process.demo.saveBTags = cms.untracked.bool(True)
 
@@ -285,6 +292,8 @@ if options.channel == 'Zmumu':
 if options.channel == 'Wenu':
    process.mypf2pat *= process.mypf2pat_wenu
 if options.channel == 'Ttbar':
+   process.mypf2pat *= process.mypf2pat_wenu
+if options.channel == 'Dijet':
    process.mypf2pat *= process.mypf2pat_wenu
 
 process.p = cms.Path(
