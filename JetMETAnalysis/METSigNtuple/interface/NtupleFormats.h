@@ -122,6 +122,16 @@ struct PFJets{
    float jetres_par6[NJets];
 };
 
+struct PFCandidates{
+   Int_t size;
+   Int_t type[NParticles];
+   float pt[NParticles];
+   float et[NParticles];
+   float phi[NParticles];
+   float eta[NParticles];
+   Int_t jetIndex[NParticles];
+};
+
 struct GenJets{
    Int_t size;
    float pt[NJets];

@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.8 2013/07/20 00:27:12 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.9 2013/07/23 18:26:53 nmirman Exp $
 //
 //
 
@@ -112,6 +112,7 @@ class METSigNtuple : public edm::EDAnalyzer {
       virtual void beginJob() ;
       virtual void analyze(const edm::Event&, const edm::EventSetup&);
       virtual void endJob() ;
+      void useOriginalPtrs(const edm::ProductID& productID);
 
       virtual void beginRun(edm::Run const&, edm::EventSetup const&);
       virtual void endRun(edm::Run const&, edm::EventSetup const&);
@@ -150,6 +151,7 @@ class METSigNtuple : public edm::EDAnalyzer {
 
       edm::InputTag genjetsTag_;
 
+      Bool_t    saveParticles_;
       Bool_t    saveBTags_;
 
       edm::InputTag  verticesTag_;
@@ -173,6 +175,7 @@ class METSigNtuple : public edm::EDAnalyzer {
       float    genmet_et, genmet_phi, genmet_sumEt;
       Long64_t    run, event, lumi;
       PFJets      pfjs;
+      PFCandidates pfps;
       GenJets     genjs;
       GenW        genW;
       GenNu       gennu;
@@ -197,6 +200,9 @@ class METSigNtuple : public edm::EDAnalyzer {
       Int_t  nTriggerPaths_;
 
       int metcount;
+
+      std::vector<reco::CandidatePtr> clusteredParticlePtrs_;
+      std::vector<int>  jetIndex_;
 };
 
 //
@@ -223,6 +229,7 @@ METSigNtuple::METSigNtuple(const edm::ParameterSet& iConfig)
    selectionChannel_ = iConfig.getUntrackedParameter<std::string>("selectionChannel");
 
    saveJetInfo_      = iConfig.getUntrackedParameter<Bool_t>("saveJetInfo");
+   saveParticles_      = iConfig.getUntrackedParameter<Bool_t>("saveParticles");
    saveBTags_      = iConfig.getUntrackedParameter<Bool_t>("saveBTags");
 
    muonTag_    = iConfig.getUntrackedParameter<edm::InputTag>("muonTag");
@@ -760,6 +767,14 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       pfjs.puid_passtight[icand] = PileupJetIdentifier::passJetId( pfjs.puid_idflag[icand],
             PileupJetIdentifier::kTight );
 
+      // get pointers to pf constituents
+      std::vector<reco::PFCandidatePtr> pfs = jet->getPFConstituents();
+      for(std::vector<reco::PFCandidatePtr>::const_iterator it=pfs.begin(); it!=pfs.end(); ++it){
+         reco::CandidatePtr ptr(*it);
+         clusteredParticlePtrs_.push_back(ptr);
+         jetIndex_.push_back(icand);
+      }
+
       icand++;
    }
    pfjs.size = icand;
@@ -871,6 +886,35 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    }
 
+   // constituents of pfJets
+   if(saveParticles_){
+      edm::Handle<edm::View<reco::PFCandidate> > pfcandidates;
+      iEvent.getByLabel(pfcandidatesTag_, pfcandidates);
+      useOriginalPtrs(pfcandidates.id()); //this is needed with PF2PAT jet constituents, to find the original pf-candidate reference
+      edm::Handle<edm::View<reco::Vertex> > vertices;
+      iEvent.getByLabel(verticesTag_, vertices);
+
+      for(unsigned int i=0; i<pfcandidates->size(); ++i){
+         reco::PFCandidatePtr pf(pfcandidates,i);
+         Int_t type     = pf->particleId();
+         pfps.type[i]    = type;
+         pfps.pt[i]     = pf->pt();
+         pfps.et[i]     = pf->et();
+         pfps.phi[i]       = pf->phi();
+         pfps.eta[i]       = pf->eta();
+
+         reco::CandidatePtr ptr(pfcandidates,i);
+         pfps.jetIndex[i]=-1;
+         for(unsigned int j=0; j<clusteredParticlePtrs_.size(); ++j){
+            if(ptr==clusteredParticlePtrs_.at(j)){
+               pfps.jetIndex[i]=jetIndex_[j];
+               break;
+            }
+         }
+      }
+      pfps.size = pfcandidates->size();
+   }
+
    // met significance
    edm::Handle<double> metsigHandle;
    iEvent.getByLabel(metSigTag_, metsigHandle);
@@ -932,6 +976,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    bool elec_primary = false;
    bool elec_veto = false;
+   bool elec_primary_loose = false;
 
    for(int i=0; i < mu.size; i++){
       // tight muon selection
@@ -957,6 +1002,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    }
    if( elec.size > 0 ){
       elec_primary = elec.IDmedium[0] and elec.pt[0] > 30 and fabs(elec.eta[0]) < 2.5;
+      elec_primary_loose = elec.IDloose[0] and elec.pt[0] > 15 and fabs(elec.eta[0]) < 2.5;
    }
    for(int i=1; i < elec.size; i++){
       if( elec.IDloose[i] ) elec_veto = elec.IDloose[i] and elec.pt[i] > 20 and elec.eta[i] < 2.5;
@@ -967,6 +1013,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    int numjets_pt60 = 0;
    int numjets_pt50 = 0;
    int numjets_pt45 = 0;
+   int numjets_pt20 = 0;
    int numbtags = 0;
    for( int i=0; i < pfjs.size; i++ ){
       int nco = pfjs.nco[i];
@@ -992,6 +1039,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       if( jetpt_corr > 60 ) numjets_pt60++;
       if( jetpt_corr > 50 ) numjets_pt50++;
       if( jetpt_corr > 45 ) numjets_pt45++;
+      if( jetpt_corr > 20 ) numjets_pt20++;
 
       // match to b-tag
       for(int j=0; j < int(goodbtag_eta.size()); j++ ){
@@ -1009,9 +1057,13 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    bool Zmumu_selection = (mu.size == 2) and mu_tight and mu_iso and mu_checketa
       and mu_checkpt and mu_zpeak;
    bool Wenu_selection = elec_primary and !elec_veto;
-   bool TtbarHad_selection = (numjets_pt60 >= 4) and (numjets_pt50 >= 5) and (numjets_pt45 >= 6)
-      and (numbtags > 1);
+   bool Wenu_loose_selection = elec_primary_loose and !elec_veto;
    bool Dijet_selection = (numjets_pt400 >= 1) and (numjets_pt200 >= 2);
+   bool Ttbar0lept_selection = (numjets_pt60 >= 4) and (numjets_pt50 >= 5) and (numjets_pt45 >= 6)
+      and (numbtags > 1);
+   bool Ttbar1lept_selection = (numjets_pt45 >= 3) and (numjets_pt20 >= 4) and (numbtags > 1)
+      and ( ((mu.size == 1) and mu_tight and mu_iso and mu_checketa and mu_checkpt)
+            or (elec_primary and !elec_veto) );
 
    // FILL THE TREE
    if( selectionChannel_ == "Zmumu" ){
@@ -1024,8 +1076,18 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          results_tree -> Fill();
       }
    }
-   else if( selectionChannel_ == "TtbarHad" ){
-      if( TtbarHad_selection ){
+   else if( selectionChannel_ == "Wenu_loose" ){
+      if( Wenu_loose_selection ){
+         results_tree -> Fill();
+      }
+   }
+   else if( selectionChannel_ == "Ttbar0lept" ){
+      if( Ttbar0lept_selection ){
+         results_tree->Fill();
+      }
+   }
+   else if( selectionChannel_ == "Ttbar1lept" ){
+      if( Ttbar1lept_selection ){
          results_tree->Fill();
       }
    }
@@ -1216,6 +1278,16 @@ METSigNtuple::beginJob()
       results_tree -> Branch("btags_discriminator",    btags.discriminator,   "btags_discriminator[btags_size]/F");
    }
 
+   if(saveParticles_){
+      results_tree -> Branch("pf_size", &pfps.size, "pf_size/I");
+      results_tree -> Branch("pf_type", pfps.type, "pf_type[pf_size]/I");
+      results_tree -> Branch("pf_et",   pfps.et,   "pf_et[pf_size]/F");
+      results_tree -> Branch("pf_pt",   pfps.pt,   "pf_pt[pf_size]/F");
+      results_tree -> Branch("pf_phi",  pfps.phi,  "pf_phi[pf_size]/F");
+      results_tree -> Branch("pf_eta",  pfps.eta,  "pf_eta[pf_size]/F");
+      results_tree -> Branch("pf_jetindex", pfps.jetIndex,  "pf_jetindex[pf_size]/I");
+   }
+
    if(runOnMC_){
       results_tree -> Branch("genj_size",  &genjs.size, "genj_size/I");
       results_tree -> Branch("genj_pt",  genjs.pt, "genj_pt[genj_size]/F");
@@ -1254,6 +1326,26 @@ METSigNtuple::endJob()
 {
    OutFile__file -> Write();
    OutFile__file -> Close();
+}
+
+// ------------ method for getting pf constituents of jets  ------------
+void 
+METSigNtuple::useOriginalPtrs(const edm::ProductID& productID){
+   std::vector<reco::CandidatePtr>::const_iterator it=clusteredParticlePtrs_.begin();
+   reco::CandidatePtr ptr(*it);
+   if(ptr.id()==productID) return; //If the first element is from the right product, return
+
+   std::vector<reco::CandidatePtr> temp;
+   for(; it!=clusteredParticlePtrs_.end(); ++it){
+      reco::CandidatePtr ptr(*it);
+      while(ptr.id()!=productID){
+         ptr = ptr->sourceCandidatePtr(0);
+         if(ptr.isNull()) return; //if it does not get to the correct product, return
+      }
+      temp.push_back(ptr);
+   }
+   clusteredParticlePtrs_.clear();
+   clusteredParticlePtrs_ = temp;
 }
 
 // ------------ method called when starting to processes a run  ------------

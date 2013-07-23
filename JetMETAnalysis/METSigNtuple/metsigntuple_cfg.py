@@ -1,5 +1,6 @@
 import FWCore.ParameterSet.Config as cms
 from FWCore.ParameterSet.VarParsing import VarParsing
+import sys
 
 options = VarParsing ('analysis')
 
@@ -8,7 +9,7 @@ options.setDefault( 'outputFile',
       )
 
 options.register( 'globalTag',
-      'START53_V7A',
+      'START53_V23',
       VarParsing.multiplicity.singleton,
       VarParsing.varType.string,
       "CMS Global Tag"
@@ -28,7 +29,31 @@ options.register( 'runOnMC',
       "True for MC"
       )
 
+options.register( 'dataType',
+      'Zmumu_MC',
+      VarParsing.multiplicity.singleton,
+      VarParsing.varType.string,
+      'Type of data file.'
+      )
+
 options.parseArguments()
+
+if ( '_mc' in options.dataType ) :
+   options.runOnMC = True
+   options.globalTag = 'START53_V23'
+   options.channel = options.dataType[:-len('_mc')]
+elif ( '_data' in options.dataType ) :
+   options.runOnMC = False
+   options.globalTag = 'FT_53_V21_AN4'
+   options.channel = options.dataType[:-len('_data')]
+else :
+   sys.exit('Invalid dataType.')
+
+if not ( options.channel == 'Zmumu' or options.channel == 'Wenu' or options.channel == 'Wenu_loose'
+      or options.channel == 'Dijet' or options.channel == 'Ttbar0lept'
+      or options.channel == 'Ttbar1lept' ) :
+   sys.exit('Invalid channel.')
+
 
 process = cms.Process("Demo")
 
@@ -198,10 +223,15 @@ if options.channel == 'Zmumu':
    trigger_paths = ["HLT_Mu17_Mu8_v"]
 if options.channel == 'Wenu':
    trigger_paths = ["HLT_Ele27_WP80_v"]
-if options.channel == 'Ttbar':
-   trigger_paths = ["HLT_SixJet45_v"]
+if options.channel == 'Wenu_loose':
+   trigger_paths = ["HLT_Ele8_CaloIdT_TrkIdT_DiJet30_v"]
 if options.channel == 'Dijet':
    trigger_paths = ["HLT_PFJet320_v"]
+if options.channel == 'Ttbar0lept':
+   trigger_paths = ["HLT_SixJet45_v"]
+if options.channel == 'Ttbar1lept':
+   trigger_paths= ["HLT_Ele25_CaloIdVT_CaloIsoT_TrkIdT_TrkIsoT_CentralPFNoPuJet30_BTagIPIter_v",
+         "HLT_IsoMu17_eta2p1_CentralPFNoPUJet30_BTagIPIter_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
 
 process.demo = cms.EDAnalyzer('METSigNtuple',
@@ -209,7 +239,8 @@ process.demo = cms.EDAnalyzer('METSigNtuple',
       output_file          = cms.untracked.string(options.outputFile),
 
       saveJetInfo          = cms.untracked.bool(True),
-      saveBTags          = cms.untracked.bool(False),
+      saveBTags            = cms.untracked.bool(False),
+      saveParticles        = cms.untracked.bool(False),
 
       selectionChannel     = cms.untracked.string('Zmumu'),
 
@@ -249,20 +280,31 @@ if not options.runOnMC:
    process.demo.pfjetCorrectorL123 = 'ak5PFL1FastL2L3Residual'
 if options.channel == 'Zmumu':
    process.demo.saveJetInfo = cms.untracked.bool(True)
+   process.demo.saveParticles = cms.untracked.bool(True)
    process.demo.selectionChannel = cms.untracked.string('Zmumu')
    process.demo.muonTag = cms.untracked.InputTag("pfSelectedMuons")
 if options.channel == 'Wenu':
    process.demo.saveJetInfo = cms.untracked.bool(False)
    process.demo.selectionChannel = cms.untracked.string('Wenu')
    process.demo.muonTag = cms.untracked.InputTag("pfIsolatedMuons")
-if options.channel == 'Ttbar':
-   process.demo.saveJetInfo = cms.untracked.bool(True)
-   process.demo.selectionChannel = cms.untracked.string('Ttbar')
+if options.channel == 'Wenu_loose':
+   process.demo.saveJetInfo = cms.untracked.bool(False)
+   process.demo.selectionChannel = cms.untracked.string('Wenu')
    process.demo.muonTag = cms.untracked.InputTag("pfIsolatedMuons")
-   process.demo.saveBTags = cms.untracked.bool(True)
 if options.channel == 'Dijet':
    process.demo.saveJetInfo = cms.untracked.bool(True)
    process.demo.selectionChannel = cms.untracked.string('Dijet')
+   process.demo.muonTag = cms.untracked.InputTag("pfIsolatedMuons")
+   process.demo.saveBTags = cms.untracked.bool(True)
+   process.demo.saveParticles = cms.untracked.bool(True)
+if options.channel == 'Ttbar0lept':
+   process.demo.saveJetInfo = cms.untracked.bool(True)
+   process.demo.selectionChannel = cms.untracked.string('Ttbar0lept')
+   process.demo.muonTag = cms.untracked.InputTag("pfIsolatedMuons")
+   process.demo.saveBTags = cms.untracked.bool(True)
+if options.channel == 'Ttbar1lept':
+   process.demo.saveJetInfo = cms.untracked.bool(True)
+   process.demo.selectionChannel = cms.untracked.string('Ttbar1lept')
    process.demo.muonTag = cms.untracked.InputTag("pfIsolatedMuons")
    process.demo.saveBTags = cms.untracked.bool(True)
 
@@ -354,9 +396,13 @@ if options.channel == 'Zmumu':
    process.mypf2pat *= process.mypf2pat_zmumu
 if options.channel == 'Wenu':
    process.mypf2pat *= process.mypf2pat_wenu
-if options.channel == 'Ttbar':
+if options.channel == 'Wenu_loose':
    process.mypf2pat *= process.mypf2pat_wenu
 if options.channel == 'Dijet':
+   process.mypf2pat *= process.mypf2pat_wenu
+if options.channel == 'Ttbar0lept':
+   process.mypf2pat *= process.mypf2pat_wenu
+if options.channel == 'Ttbar1lept':
    process.mypf2pat *= process.mypf2pat_wenu
 
 process.p = cms.Path(
