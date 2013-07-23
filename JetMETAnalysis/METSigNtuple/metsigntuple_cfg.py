@@ -44,12 +44,14 @@ process.source = cms.Source("PoolSource",
          #'/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root'
          #'/store/mc/Summer12_DR53X/WJetsToLNu_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v2/0000/000869F4-59EE-E111-9BF6-003048D47752.root'
          #'/store/data/Run2012A/SingleElectron/AOD/13Jul2012-v1/0000/001A2EB8-47D4-E111-B527-003048679070.root'
-         '/store/mc/Summer12_DR53X/TTJets_HadronicMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v1/00000/002A756C-FA15-E211-9FA6-485B39800B75.root'
+         #'/store/mc/Summer12_DR53X/TTJets_HadronicMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v1/00000/002A756C-FA15-E211-9FA6-485B39800B75.root'
+         '/store/data/Run2012A/DoubleMu/AOD/22Jan2013-v1/20000/001AE30A-BA81-E211-BBE7-003048FFD770.root'
          )
       )
 
 process.load("Configuration.Geometry.GeometryIdeal_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+process.load("Configuration.StandardSequences.MagneticField_cff")
 process.GlobalTag.globaltag = ( options.globalTag+'::All' )
 process.load("JetMETCorrections.Configuration.DefaultJEC_cff")
 
@@ -88,20 +90,81 @@ process.mypf2pat_wenu = cms.Sequence(
       process.pfNoElectron *
       process.pfJets
       )
+#
+## met corrections and filters
+#
 
-# met corrections and filters
+# type-I corrections
 process.load("JetMETCorrections.Type1MET.pfMETCorrections_cff")
 if not options.runOnMC:
       process.pfJetMETcorr.jetCorrLabel = cms.string("ak5PFL1FastL2L3Residual")
 
+# type-0 corrections
+process.load("JetMETCorrections.Type1MET.pfMETCorrectionType0_cfi")
+
+process.pfType1CorrectedMetType0 = process.pfType1CorrectedMet.clone(
+      applyType0Corrections = cms.bool(False),
+      srcType1Corrections = cms.VInputTag(
+         cms.InputTag('pfMETcorrType0'),
+         cms.InputTag('pfJetMETcorr', 'type1')        
+         )
+      )
+process.producePFMETCorrectionsType0 = cms.Sequence( process.producePFMETCorrections )
+process.producePFMETCorrectionsType0.replace(
+      process.pfType1CorrectedMet,
+      process.pfType1CorrectedMetType0
+      )
+
+# x/y shift corrections
+process.load("JetMETCorrections.Type1MET.pfMETsysShiftCorrections_cfi")
+if not options.runOnMC:
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runAvsNvtx_data
+if options.runOnMC:
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runAvsNvtx_mc
+
+process.pfType1CorrectedMetXYshift = process.pfType1CorrectedMet.clone(
+      srcType1Corrections = cms.VInputTag(
+         cms.InputTag('pfJetMETcorr', 'type1'),
+         cms.InputTag('pfMEtSysShiftCorr')
+         )
+      )
+process.producePFMETCorrectionsXYshift = cms.Sequence( process.producePFMETCorrections )
+process.producePFMETCorrectionsXYshift.replace(
+      process.pfType1CorrectedMet,
+      process.pfType1CorrectedMetXYshift
+      )
+
+# type-0 and x/y shift corrections
+process.pfType1CorrectedMetType0XYshift = process.pfType1CorrectedMet.clone(
+      applyType0Corrections = cms.bool(False),
+      srcType1Corrections = cms.VInputTag(
+         cms.InputTag('pfMETcorrType0'),
+         cms.InputTag('pfJetMETcorr', 'type1'),
+         cms.InputTag('pfMEtSysShiftCorr')
+         )
+      )
+process.producePFMETCorrectionsType0XYshift = cms.Sequence( process.producePFMETCorrections )
+process.producePFMETCorrectionsType0XYshift.replace(
+      process.pfType1CorrectedMet,
+      process.pfType1CorrectedMetType0XYshift
+      )
+
 process.mymet = cms.Sequence(
       process.pfMET *
-      process.producePFMETCorrections
+      process.producePFMETCorrections *
+      process.type0PFMEtCorrection *
+      process.producePFMETCorrectionsType0 *
+      process.pfMEtSysShiftCorrSequence *
+      process.producePFMETCorrectionsXYshift *
+      process.producePFMETCorrectionsType0XYshift
       )
 
 metList = []
 metList.append(cms.untracked.InputTag("pfMet", "", ""))
 metList.append(cms.untracked.InputTag("pfType1CorrectedMet", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMetType0", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMetXYshift", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMetType0XYshift", "", ""))
 
 # jet pileup id
 from CMGTools.External.pujetidsequence_cff import puJetId, puJetMva

@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.7 2013/06/30 22:04:13 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.8 2013/07/20 00:27:12 nmirman Exp $
 //
 //
 
@@ -1009,7 +1009,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    bool Zmumu_selection = (mu.size == 2) and mu_tight and mu_iso and mu_checketa
       and mu_checkpt and mu_zpeak;
    bool Wenu_selection = elec_primary and !elec_veto;
-   bool Ttbar_selection = (numjets_pt60 >= 4) and (numjets_pt50 >= 5) and (numjets_pt45 >= 6)
+   bool TtbarHad_selection = (numjets_pt60 >= 4) and (numjets_pt50 >= 5) and (numjets_pt45 >= 6)
       and (numbtags > 1);
    bool Dijet_selection = (numjets_pt400 >= 1) and (numjets_pt200 >= 2);
 
@@ -1024,8 +1024,8 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          results_tree -> Fill();
       }
    }
-   else if( selectionChannel_ == "Ttbar" ){
-      if( Ttbar_selection ){
+   else if( selectionChannel_ == "TtbarHad" ){
+      if( TtbarHad_selection ){
          results_tree->Fill();
       }
    }
