@@ -1,14 +1,19 @@
 #!/bin/bash
 
-date="20130626"
+date="20130723"
 
-crabdir[0]="crab_ZmumuNtuples_data_${date}"
-crabdir[1]="crab_ZmumuNtuples_mc_${date}"
-crabdir[2]="crab_WenuNtuples_data_${date}"
-crabdir[3]="crab_WenuNtuples_mc_${date}"
-crabdir[4]="crab_WenuNtuples_data_split_20130626"
-crabdir[5]="crab_TtbarNtuples_mc_20130630"
-crabdir[6]="crab_WenuNtuples_mc_qcd_20130626"
+crabdir[0]="crab_Zmumu_data_${date}"
+crabdir[1]="crab_Zmumu_mc_${date}"
+crabdir[2]="crab_Wenu_data_${date}"
+crabdir[3]="crab_Wenu_mc_${date}"
+crabdir[4]="crab_Wenu_loose_data_${date}"
+crabdir[5]="crab_Wenu_loose_mc_${date}"
+crabdir[6]="crab_Dijet_data_${date}"
+crabdir[7]="crab_Dijet_mc_${date}"
+crabdir[8]="crab_Ttbar0lept_data_${date}"
+crabdir[9]="crab_Ttbar0lept_mc_${date}"
+crabdir[10]="crab_Ttbar1lept_data_${date}"
+crabdir[11]="crab_Ttbar1lept_mc_${date}"
 
 count=0
 end_job=""
@@ -30,10 +35,10 @@ do
       done
    done
 
-   echo -e "\ncurrent time = $(date)"
-   echo -e "will resume in 5 minutes..."
-   echo -e "end job? (yes/no) \c"
-   read -t 300 end_job
+   #echo -e "\ncurrent time = $(date)"
+   #echo -e "will resume in 5 minutes..."
+   #echo -e "end job? (yes/no) \c"
+   #read -t 300 end_job
 
    (( count++ ))
 done
