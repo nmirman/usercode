@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.9 2013/07/23 18:26:53 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.10 2013/07/23 22:59:45 nmirman Exp $
 //
 //
 
@@ -85,6 +85,7 @@ Implementation:
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
+#include <time.h>
 
 using namespace std;
 using namespace edm;
