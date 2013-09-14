@@ -9,13 +9,26 @@
 <use   name="DataFormats/TrackReco" />
 <use   name="DataFormats/VertexReco" />
 <use   name="DataFormats/PatCandidates"/>
+<use   name="DataFormats/StdDictionaries"/>
 <use   name="HLTrigger/HLTcore" />
 <use   name="RecoMET/METAlgorithms" />
+<use   name="RecoMET/METAnalyzers" />
+<use   name="RecoMET/METFilters" />
+<use   name="RecoMET/METProducers" />
+<use   name="RecoJets/JetProducers" />
 <use   name="JetMETCorrections/Objects" />
 <use   name="PhysicsTools/Utilities" />
+<use   name="PhysicsTools/PatAlgos" />
+<use   name="PhysicsTools/PatUtils" />
+<use   name="PhysicsTools/SelectorUtils" />
 <use   name="EGamma/EGammaAnalysisTools" />
 <use   name="JetMETAnalysis/METSignificance" />
 <use   name="DataFormats/BTauReco" /> 
+<use   name="CommonTools/RecoAlgos" /> 
+<use   name="CommonTools/ParticleFlow" /> 
+<use   name="JetMETCorrections/METPUSubtraction"/>
+<use   name="JetMETCorrections/Type1MET"/>
+<use   name="RecoTauTag/RecoTau" />
 <flags EDM_PLUGIN="1"/>
 <export>
    <lib name="1"/>

@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.10 2013/07/23 22:59:45 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.11 2013/08/02 23:37:39 nmirman Exp $
 //
 //
 
@@ -53,12 +53,13 @@ Implementation:
 
 #include "CondFormats/JetMETObjects/interface/JetResolution.h"
 #include "JetMETCorrections/Objects/interface/JetCorrector.h"
+#include "JetMETCorrections/Objects/interface/JetCorrectionsRecord.h"
+#include "CondFormats/JetMETObjects/interface/JetCorrectorParameters.h"
+#include "CondFormats/JetMETObjects/interface/JetCorrectionUncertainty.h"
 
 #include "DataFormats/JetReco/interface/GenJet.h"
 
 #include "PhysicsTools/Utilities/interface/LumiReWeighting.h"
-
-#include "CMGTools/External/interface/PileupJetIdentifier.h"
 
 #include "FWCore/Common/interface/TriggerNames.h"
 #include "HLTrigger/HLTcore/interface/HLTConfigProvider.h"
@@ -710,16 +711,13 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    Handle<reco::PFJetCollection> inputUncorJets;
    iEvent.getByLabel( pfjetsTag_, inputUncorJets );
 
-   // pileup jet id
-   Handle<ValueMap<float> > puJetIdMVA;
-   iEvent.getByLabel(edm::InputTag("recoPuJetMva","full53xDiscriminant"), puJetIdMVA);
-
-   Handle<ValueMap<int> > puJetIdFlag;
-   iEvent.getByLabel(edm::InputTag("recoPuJetMva","full53xId"), puJetIdFlag);
-
    // jet energy corrections
    const JetCorrector* corrector  = JetCorrector::getJetCorrector (pfjetCorrectorL1_, iSetup);
    const JetCorrector* corrector2 = JetCorrector::getJetCorrector (pfjetCorrectorL123_, iSetup);
+
+   // jet energy correction uncertainty
+   JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty("src/PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt");
+   //JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty("../../PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt");
 
    icand = 0;
    for(reco::PFJetCollection::const_iterator jet = inputUncorJets->begin(); jet != inputUncorJets->end() && icand<saveJets_; ++jet) {
@@ -735,6 +733,8 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
       double jpt  = ( jet->pt()*pfjs.l1l2l3[icand] > 10 ) ? jet->pt()*pfjs.l1l2l3[icand] : jet->pt();
       double jeta = jet->eta();
+      if( jeta < -5 ) jeta = -5;
+      if( jeta > 5 ) jeta = 5;
 
       pfjs.neutralHadronFraction[icand] = jet->neutralHadronEnergyFraction();
       pfjs.neutralEmFraction[icand] = jet->neutralEmEnergyFraction();
@@ -756,17 +756,12 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       pfjs.jetres_par5[icand] = fPtResol.GetParameter(5);
       pfjs.jetres_par6[icand] = fPtResol.GetParameter(6);
 
+      jecUnc->setJetEta(jeta);
+      jecUnc->setJetPt(jpt); // here you must use the CORRECTED jet pt
+      pfjs.jec_unc[icand] = jecUnc->getUncertainty(true);
+
       delete fPtEta;
       delete fPhiEta;
-
-      pfjs.puid_mva[icand]  = (*puJetIdMVA)[jetRef];
-      pfjs.puid_idflag[icand] = (*puJetIdFlag)[jetRef];
-      pfjs.puid_passloose[icand] = PileupJetIdentifier::passJetId( pfjs.puid_idflag[icand],
-            PileupJetIdentifier::kLoose );
-      pfjs.puid_passmedium[icand] = PileupJetIdentifier::passJetId( pfjs.puid_idflag[icand],
-            PileupJetIdentifier::kMedium );
-      pfjs.puid_passtight[icand] = PileupJetIdentifier::passJetId( pfjs.puid_idflag[icand],
-            PileupJetIdentifier::kTight );
 
       // get pointers to pf constituents
       std::vector<reco::PFCandidatePtr> pfs = jet->getPFConstituents();
@@ -779,6 +774,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       icand++;
    }
    pfjs.size = icand;
+   delete jecUnc;
 
    // genjets
    if(runOnMC_){
@@ -1011,8 +1007,9 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    // loose jetID
    int numjets_pt400 = 0;
    int numjets_pt200 = 0;
-   int numjets_pt60 = 0;
-   int numjets_pt50 = 0;
+   int numjets_pt75 = 0;
+   int numjets_pt65 = 0;
+   int numjets_pt55 = 0;
    int numjets_pt45 = 0;
    int numjets_pt20 = 0;
    int numbtags = 0;
@@ -1035,12 +1032,15 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
       double jetpt_corr = (pfjs.pt[i]*pfjs.l1l2l3[i] > 10) ? pfjs.pt[i]*pfjs.l1l2l3[i] : pfjs.pt[i];
 
-      if( jetpt_corr > 400 ) numjets_pt400++;
-      if( jetpt_corr > 200 ) numjets_pt200++;
-      if( jetpt_corr > 60 ) numjets_pt60++;
-      if( jetpt_corr > 50 ) numjets_pt50++;
-      if( jetpt_corr > 45 ) numjets_pt45++;
-      if( jetpt_corr > 20 ) numjets_pt20++;
+      if( passID ){
+         if( jetpt_corr > 400 ) numjets_pt400++;
+         if( jetpt_corr > 200 ) numjets_pt200++;
+         if( jetpt_corr > 75 ) numjets_pt75++;
+         if( jetpt_corr > 65 ) numjets_pt65++;
+         if( jetpt_corr > 55 ) numjets_pt45++;
+         if( jetpt_corr > 45 ) numjets_pt45++;
+         if( jetpt_corr > 20 ) numjets_pt20++;
+      }
 
       // match to b-tag
       for(int j=0; j < int(goodbtag_eta.size()); j++ ){
@@ -1060,7 +1060,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    bool Wenu_selection = elec_primary and !elec_veto;
    bool Wenu_loose_selection = elec_primary_loose and !elec_veto;
    bool Dijet_selection = (numjets_pt400 >= 1) and (numjets_pt200 >= 2);
-   bool Ttbar0lept_selection = (numjets_pt60 >= 4) and (numjets_pt50 >= 5) and (numjets_pt45 >= 6)
+   bool Ttbar0lept_selection = (numjets_pt75 >= 4) and (numjets_pt65 >= 5) and (numjets_pt55 >= 6)
       and (numbtags > 1);
    bool Ttbar1lept_selection = (numjets_pt45 >= 3) and (numjets_pt20 >= 4) and (numbtags > 1)
       and ( ((mu.size == 1) and mu_tight and mu_iso and mu_checketa and mu_checkpt)
@@ -1246,6 +1246,7 @@ METSigNtuple::beginJob()
    results_tree -> Branch("pfj_jetres_par4",    pfjs.jetres_par4,   "pfj_jetres_par4[pfj_size]/F");
    results_tree -> Branch("pfj_jetres_par5",    pfjs.jetres_par5,   "pfj_jetres_par5[pfj_size]/F");
    results_tree -> Branch("pfj_jetres_par6",    pfjs.jetres_par6,   "pfj_jetres_par6[pfj_size]/F");
+   results_tree -> Branch("pfj_jec_unc",    pfjs.jec_unc,   "pfj_jec_unc[pfj_size]/F");
 
    if( saveJetInfo_ ){
       results_tree -> Branch("pfj_neutralHadronFraction", pfjs.neutralHadronFraction,
@@ -1259,15 +1260,6 @@ METSigNtuple::beginJob()
       results_tree -> Branch("pfj_chargedEmFraction", pfjs.chargedEmFraction,
             "pfj_chargedEmFraction[pfj_size]/F");
       results_tree -> Branch("pfj_numConstituents", pfjs.nco, "pfj_numConstituents[pfj_size]/I");
-
-      results_tree -> Branch("pfj_puid_mva", pfjs.puid_mva, "pfj_puid_mva[pfj_size]/F");
-      results_tree -> Branch("pfj_puid_idflag", pfjs.puid_idflag, "pfj_puid_idflag[pfj_size]/I");
-      results_tree -> Branch("pfj_puid_passloose", pfjs.puid_passloose,
-            "pfj_puid_passloose[pfj_size]/O");
-      results_tree -> Branch("pfj_puid_passmedium", pfjs.puid_passmedium,
-            "pfj_puid_passmedium[pfj_size]/O");
-      results_tree -> Branch("pfj_puid_passtight", pfjs.puid_passtight,
-            "pfj_puid_passtight[pfj_size]/O");
    }
 
    if( saveBTags_ ){

@@ -107,12 +107,6 @@ struct PFJets{
    float chargedHadronMultiplicity[NJets];
    float chargedEmFraction[NJets];
 
-   float puid_mva[NJets];
-   int puid_idflag[NJets];
-   bool puid_passloose[NJets];
-   bool puid_passmedium[NJets];
-   bool puid_passtight[NJets];
-
    float jetres_par0[NJets];
    float jetres_par1[NJets];
    float jetres_par2[NJets];
@@ -120,6 +114,8 @@ struct PFJets{
    float jetres_par4[NJets];
    float jetres_par5[NJets];
    float jetres_par6[NJets];
+
+   float jec_unc[NJets];
 };
 
 struct PFCandidates{

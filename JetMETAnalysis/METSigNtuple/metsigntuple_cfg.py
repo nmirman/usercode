@@ -30,7 +30,7 @@ options.register( 'runOnMC',
       )
 
 options.register( 'dataType',
-      'Zmumu_MC',
+      'Zmumu_mc',
       VarParsing.multiplicity.singleton,
       VarParsing.varType.string,
       'Type of data file.'
@@ -65,13 +65,13 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(options.maxE
 process.source = cms.Source("PoolSource",
       fileNames = cms.untracked.vstring(
          #'/store/mc/Summer12_DR53X/DYJetsToLL_M-50_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v1/0000/00037C53-AAD1-E111-B1BE-003048D45F38.root'
-         #'/store/data/Run2012A/DoubleMu/AOD/13Jul2012-v1/00000/0048B245-B9D2-E111-A8DC-0018F3D096BE.root'
+         '/store/data/Run2012A/DoubleMu/AOD/13Jul2012-v1/00000/0048B245-B9D2-E111-A8DC-0018F3D096BE.root'
          #'/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root'
          #'/store/mc/Summer12_DR53X/WJetsToLNu_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v2/0000/000869F4-59EE-E111-9BF6-003048D47752.root'
          #'/store/data/Run2012A/SingleElectron/AOD/13Jul2012-v1/0000/001A2EB8-47D4-E111-B527-003048679070.root'
          #'/store/mc/Summer12_DR53X/TTJets_HadronicMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v1/00000/002A756C-FA15-E211-9FA6-485B39800B75.root'
          #'/store/data/Run2012A/DoubleMu/AOD/22Jan2013-v1/20000/001AE30A-BA81-E211-BBE7-003048FFD770.root'
-         '/store/data/Run2012D/SingleElectron/AOD/22Jan2013-v1/10000/000D8CF0-D999-E211-A1E0-002590593920.root'
+         #'/store/data/Run2012D/SingleElectron/AOD/22Jan2013-v1/10000/000D8CF0-D999-E211-A1E0-002590593920.root'
          )
       )
 
@@ -144,9 +144,9 @@ process.producePFMETCorrectionsType0.replace(
 # x/y shift corrections
 process.load("JetMETCorrections.Type1MET.pfMETsysShiftCorrections_cfi")
 if not options.runOnMC:
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runAvsNvtx_data
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data
 if options.runOnMC:
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runAvsNvtx_mc
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_mc
 
 process.pfType1CorrectedMetXYshift = process.pfType1CorrectedMet.clone(
       srcType1Corrections = cms.VInputTag(
@@ -191,24 +191,6 @@ metList.append(cms.untracked.InputTag("pfType1CorrectedMet", "", ""))
 metList.append(cms.untracked.InputTag("pfType1CorrectedMetType0", "", ""))
 metList.append(cms.untracked.InputTag("pfType1CorrectedMetXYshift", "", ""))
 metList.append(cms.untracked.InputTag("pfType1CorrectedMetType0XYshift", "", ""))
-
-# jet pileup id
-from CMGTools.External.pujetidsequence_cff import puJetId, puJetMva
-
-process.recoPuJetId = puJetId.clone(
-      jets = cms.InputTag("pfJets"),
-      applyJec = cms.bool(True),
-      inputIsCorrected = cms.bool(False),                
-      )
-
-process.recoPuJetMva = puJetMva.clone(
-      jets = cms.InputTag("pfJets"),
-      jetids = cms.InputTag("recoPuJetId"),
-      applyJec = cms.bool(True),
-      inputIsCorrected = cms.bool(False),                
-      )
-
-process.recoPuJetIdSequence = cms.Sequence(process.recoPuJetId * process.recoPuJetMva )
 
 # rho value for isolation
 from RecoJets.JetProducers.kt4PFJets_cfi import *
@@ -411,7 +393,6 @@ process.p = cms.Path(
       process.filtersSeq *
       process.mypf2pat *
       process.mymet *
-      process.recoPuJetIdSequence *
       process.kt6PFJetsForIsolation *
       process.eleIsoSequence *
       process.pfiso *
