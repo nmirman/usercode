@@ -13,7 +13,7 @@ Implementation:
 //
 // Original Author:  nathan mirman
 //         Created:  Wed Mar  6 16:05:43 CST 2013
-// $Id: METSigNtuple.cc,v 1.11 2013/08/02 23:37:39 nmirman Exp $
+// $Id: METSigNtuple.cc,v 1.12 2013/09/14 19:30:44 nmirman Exp $
 //
 //
 
@@ -186,6 +186,8 @@ class METSigNtuple : public edm::EDAnalyzer {
       BTags       btags;
 
       Vertices    vtxs;
+
+      edm::LumiReWeighting LumiWeights_;
 
       float metsig;
       float metsigmatrix00;
@@ -460,19 +462,9 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          geninfo.xPDF2    = gi->pdf()->xPDF.second;
       }
 
+      std::vector<PileupSummaryInfo>::const_iterator PVI;
       Handle<std::vector<PileupSummaryInfo> > PupInfo;
       iEvent.getByLabel("addPileupInfo", PupInfo);
-
-      std::vector< float > PU2012_MC;
-      std::vector< float > PU2012_Data;
-
-      for( int i=0; i<60; i++) {
-         PU2012_MC.push_back( PU2012_MCf[i] );
-         PU2012_Data.push_back( PU2012_Dataf[i] );
-      }
-      edm::LumiReWeighting LumiWeights_( PU2012_MC, PU2012_Data);
-
-      std::vector<PileupSummaryInfo>::const_iterator PVI;
 
       float Tnvtx = -1.0;
       for(PVI = PupInfo->begin(); PVI != PupInfo->end(); ++PVI) {
@@ -1037,7 +1029,7 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          if( jetpt_corr > 200 ) numjets_pt200++;
          if( jetpt_corr > 75 ) numjets_pt75++;
          if( jetpt_corr > 65 ) numjets_pt65++;
-         if( jetpt_corr > 55 ) numjets_pt45++;
+         if( jetpt_corr > 55 ) numjets_pt55++;
          if( jetpt_corr > 45 ) numjets_pt45++;
          if( jetpt_corr > 20 ) numjets_pt20++;
       }
@@ -1109,6 +1101,16 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 METSigNtuple::beginJob()
 {
    OutFile__file  = new TFile( OutputFileName_.c_str(), "RECREATE" );
+
+   // pileup reweighting
+   std::vector< float > PU2012_MC;
+   std::vector< float > PU2012_Data;
+
+   for( int i=0; i<60; i++) {
+      PU2012_MC.push_back( PU2012_MCf[i] );
+      PU2012_Data.push_back( PU2012_Dataf[i] );
+   }
+   LumiWeights_ = LumiReWeighting( PU2012_MC, PU2012_Data);
 
    results_tree = new TTree("events", "events");
    results_tree -> Branch("run", &run, "run/I");
