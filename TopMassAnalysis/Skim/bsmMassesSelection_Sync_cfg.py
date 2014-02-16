@@ -203,27 +203,38 @@ process.eventCleaning = cms.Sequence(
 )
 
 # primary vertex selection
-pvSelection = cms.PSet(
-  minNdof = cms.double( 4. )
-, maxZ    = cms.double( 24. )
-, maxRho  = cms.double( 2. )
-)
+#pvSelection = cms.PSet(
+#  minNdof = cms.double( 4. )
+#, maxZ    = cms.double( 24. )
+#, maxRho  = cms.double( 2. )
+#)
 
-process.goodOfflinePrimaryVertices = cms.EDFilter(
-  "PrimaryVertexObjectFilter" # checks for fake PVs automatically
-, filterParams = pvSelection
-, filter       = cms.bool( False ) # use only as producer
-, src          = cms.InputTag( 'offlinePrimaryVertices' )
-)
+#process.goodOfflinePrimaryVertices = cms.EDFilter(
+#  "PrimaryVertexObjectFilter" # checks for fake PVs automatically
+#, filterParams = pvSelection
+#, filter       = cms.bool( False ) # use only as producer
+#, src          = cms.InputTag( 'offlinePrimaryVertices' )
+#)
 
-process.goodOfflinePrimaryVertexFilter = cms.EDFilter(
-  "PrimaryVertexFilter" # checks for fake PVs automatically
-, pvSelection
-, NPV = cms.int32( 1 )
-, pvSrc = cms.InputTag( 'goodOfflinePrimaryVertices' )
-)
+#process.goodOfflinePrimaryVertexFilter = cms.EDFilter(
+#  "PrimaryVertexFilter" # checks for fake PVs automatically
+#, pvSelection
+#, NPV = cms.int32( 1 )
+#, pvSrc = cms.InputTag( 'goodOfflinePrimaryVertices' )
+#)
 
-process.vertexing = cms.Sequence(process.goodOfflinePrimaryVertices*process.goodOfflinePrimaryVertexFilter)
+process.goodOfflinePrimaryVertices = cms.EDFilter( "PrimaryVertexObjectFilter",
+      filterParams = cms.PSet(
+         minNdof = cms.double( 4. ),
+         maxZ = cms.double( 24. ),
+         maxRho = cms.double( 2. )
+         ),
+      filter = cms.bool( True),
+      src = cms.InputTag( 'offlinePrimaryVertices' )
+      )
+
+#process.vertexing = cms.Sequence(process.goodOfflinePrimaryVertices*process.goodOfflinePrimaryVertexFilter)
+process.vertexing = cms.Sequence(process.goodOfflinePrimaryVertices)
 
 
 # PAT configuration
