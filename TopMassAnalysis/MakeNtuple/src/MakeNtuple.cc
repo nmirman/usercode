@@ -13,7 +13,7 @@
 //
 // Original Author:  Nicholas Eggert
 //         Created:  Tue Sep 20 15:51:21 CDT 2011
-// $Id: MakeNtuple.cc,v 1.1 2013/06/20 18:59:31 nmirman Exp $
+// $Id: MakeNtuple.cc,v 1.2 2013/07/18 20:06:43 xguo Exp $
 //
 //
 
@@ -160,6 +160,7 @@ class MakeNtuple : public edm::EDAnalyzer {
       int run, lumi, event;
       int jetcount;
       double jet1Vz, jet2Vz;
+      double jet1bdisc, jet2bdisc;
       //double jet1VzCovariance, jet2VzCovariance;
 
 };
@@ -304,6 +305,8 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   jet2Vz = jet2.vz()-primary_vertex_z;
   //jet1VzCovariance =jet1.vertexCovariance(2,2);
   //jet2VzCovariance =jet2.vertexCovariance(2,2);
+  jet1bdisc = jet1.bDiscriminator(bTagger_);
+  jet2bdisc = jet2.bDiscriminator(bTagger_);
 
   pat::Jet jet1Uncor = jet1.correctedJet(0); // 0 = Uncorrected
   pat::Jet jet2Uncor = jet2.correctedJet(0);
@@ -547,8 +550,8 @@ MakeNtuple::beginJob()
   treeData->Branch("jetnumber",&jetcount);
   treeData->Branch("jet1Vz",&jet1Vz);
   treeData->Branch("jet2Vz",&jet2Vz);
-  //treeData->Branch("jet1VzCovariance",&jet1VzCovariance);
-  //treeData->Branch("jet2VzCovariance",&jet2VzCovariance);
+  treeData->Branch("jet1bdisc",&jet1bdisc);
+  treeData->Branch("jet2bdisc",&jet2bdisc);
 
   if (runOnMC_) {
 	  treeData->Branch("jet1GenId", &jet1GenId);
