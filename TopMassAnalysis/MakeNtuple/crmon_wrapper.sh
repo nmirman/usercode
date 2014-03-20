@@ -1,6 +1,6 @@
 #!/bin/bash
 
-date="20130708"
+date="20140223"
 
 crabdir[0]="crab_TopMassNtuple_data_${date}"
 #crabdir[1]="crab_TopMassSkim_mc_${date}"

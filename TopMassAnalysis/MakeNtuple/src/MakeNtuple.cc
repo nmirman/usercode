@@ -142,12 +142,13 @@ class MakeNtuple : public edm::EDAnalyzer {
       const reco::Candidate *t, *tb, *b, *bb, *Wp, *Wm, *lp, *lm, *n, *nb;
 
       TLorentzVector jet1FourVector, jet2FourVector, lepton1FourVector, lepton2FourVector;
-	  TLorentzVector uncorrectedJet1FourVector, uncorrectedJet2FourVector;
-	  TLorentzVector generatedJet1FourVector, generatedJet2FourVector, metFourVector, generatedMetFourVector;
-     TLorentzVector bGEN, bbarGEN, lpGEN, lmGEN, nGEN, nbarGEN;
-     int lpPdgIdGEN, lmPdgIdGEN;
+      TLorentzVector uncorrectedJet1FourVector, uncorrectedJet2FourVector;
+      TLorentzVector generatedJet1FourVector, generatedJet2FourVector, metFourVector, generatedMetFourVector;
+      TLorentzVector bGEN, bbarGEN, lpGEN, lmGEN, nGEN, nbarGEN;
+      int lpPdgIdGEN, lmPdgIdGEN;
+      int nPdgIdGEN, nbPdgIdGEN;
 
-     double jet1jesuncertainty, jet2jesuncertainty;
+      double jet1jesuncertainty, jet2jesuncertainty;
       double jet1PtResolution, jet1PhiResolution, jet1EtaResolution;
       double jet2PtResolution, jet2PhiResolution, jet2EtaResolution;
       double uncorrectedJet1PtResolution, uncorrectedJet1PhiResolution, uncorrectedJet1EtaResolution;
@@ -361,6 +362,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
         bb = (tb->daughter(1));
         Wm = (tb->daughter(0));
      }
+   
      if (Wp->daughter(0) and (Wp->daughter(0)->pdgId() == -13 || Wp->daughter(0)->pdgId() == -11) ) {
         lp = (Wp->daughter(0));
         n = (Wp->daughter(1));
@@ -370,10 +372,12 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
         n = (Wp->daughter(0));
      }
      else {
-        std::cout << "Wp\n";
+        //std::cout << "Wp\n";
         //std::cout << Wp->daughter(1)->pdgId() << std::endl;
         //std::cout << Wp->daughter(0)->pdgId() << std::endl;
-        return; // not a dilepton event
+        //return; // not a dilepton event
+        lp = (Wp->daughter(1));
+        n = (Wp->daughter(0));
      }
      if (Wm->daughter(0)->pdgId() == 13 || Wm->daughter(0)->pdgId() == 11) {
         lm = (Wm->daughter(0));
@@ -384,10 +388,12 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
         nb = (Wm->daughter(0));
      }
      else {
-        std::cout << "Wm\n";
-        std::cout << Wp->daughter(1)->pdgId() << std::endl;
-        std::cout << Wp->daughter(0)->pdgId() << std::endl;
-        return; // not a dilepton event
+        //std::cout << "Wm\n";
+        //std::cout << Wm->daughter(1)->pdgId() << std::endl;
+        //std::cout << Wm->daughter(0)->pdgId() << std::endl;
+        //return; // not a dilepton event
+        lm = (Wm->daughter(1));
+        nb = (Wm->daughter(0));
      }
 
      bGEN.SetPxPyPzE(b->px(), b->py(), b->pz(), b->energy());
@@ -398,6 +404,8 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
      nbarGEN.SetPxPyPzE(nb->px(), nb->py(), nb->pz(), nb->energy());
      lpPdgIdGEN = lp->pdgId();
      lmPdgIdGEN = lm->pdgId();
+     nPdgIdGEN = n->pdgId();
+     nbPdgIdGEN = nb->pdgId();
 
 	} // if runOnMC_
    else
@@ -410,6 +418,8 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
      nbarGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
      lpPdgIdGEN = 0;
      lmPdgIdGEN = 0;
+     nPdgIdGEN = 0;
+     nbPdgIdGEN = 0;
    }
 
   // get jet resolutions
@@ -567,6 +577,8 @@ MakeNtuple::beginJob()
      treeData->Branch("nbarGEN", &nbarGEN);
      treeData->Branch("lpPdgIdGEN", &lpPdgIdGEN);
      treeData->Branch("lmPdgIdGEN", &lmPdgIdGEN);
+     treeData->Branch("nPdgIdGEN", &nPdgIdGEN);
+     treeData->Branch("nbPdgIdGEN", &nbPdgIdGEN);
      treeData->Branch("jet1ParentIdGEN", &jet1ParentIdGEN);
      treeData->Branch("jet2ParentIdGEN", &jet2ParentIdGEN);
   }

@@ -9,7 +9,7 @@ options = VarParsing ('analysis')
 options.setDefault( 'maxEvents', -1)
 
 options.setDefault( 'outputFile',
-                  "BsmMassesSkim_Summer11_Sync.root" )
+                  "topmassSkim.root" )
                   
 options.setDefault( 'inputFiles',
                     #'/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root')
@@ -22,7 +22,7 @@ options.register( 'inputType',
                   'data',
                   VarParsing.multiplicity.singleton,
                   VarParsing.varType.string,
-                  'Type of input file. Options are data, signalMC, tauMC, topNonDilMC, backgroundMC.'
+                  'Type of input file. Options are Data or MC.'
                   )
 
 options.register( 'globalTag',
@@ -52,30 +52,9 @@ if ( 'MC' in options.dataType ) :
    runOnMC = True
    trigger_paths = ["HLT_Mu17_Mu8_v17","HLT_Mu17_TkMu8_v10","HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v17","HLT_Mu17_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v7","HLT_Mu8_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v7"]
    options.globalTag = 'START53_V7A'
-   if ( 'TTJets' in options.dataType ) :
-      signalMC = True
-      TauMC = False
-      TopNonDilMC = False
-   elif ( 'T_tW' in options.dataType ) :
-      signalMC = False
-      TauMC = False
-      TopNonDilMC = True
-   elif ( 'WJetsToLNu' in options.dataType ) :
-      signalMC = False
-      TauMC = False
-      TopNonDilMC = False
-   elif ( 'DYJetsToLL' in options.dataType ) :
-      signalMC = False
-      TauMC = False
-      TopNonDilMC = False
-   else :
-      sys.exit('dataType value was invalid.  The MC type does not exist.')
 
 elif ( 'Data' in options.dataType ) :
    runOnMC = False
-   signalMC = False
-   TauMC = False
-   TopNonDilMC = False
    options.globalTag = 'FT_53_V21_AN4'
    if ( 'DoubleMu' in options.dataType ) :
       trigger_paths = ["HLT_Mu17_Mu8_v","HLT_Mu17_TkMu8_v"]
@@ -110,7 +89,7 @@ process.options = cms.untracked.PSet(
 )
 process.MessageLogger.cerr.FwkReport.reportEvery = fwkReportEvery
 
-process.load("Configuration.StandardSequences.Geometry_cff")
+process.load("Configuration.Geometry.GeometryIdeal_cff")
 process.load("Configuration.StandardSequences.MagneticField_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 
@@ -119,7 +98,6 @@ process.GlobalTag.globaltag = options.globalTag + '::All'
 # input stuff
 process.source = cms.Source( "PoolSource"
 , noEventSort        = cms.untracked.bool( True )
-, duplicateCheckMode = cms.untracked.string( 'noDuplicateCheck' )
 , fileNames          = cms.untracked.vstring( inputfiles )
 )
 # maximum number of events
@@ -141,54 +119,27 @@ process.outpath = cms.EndPath( process.out )
 process.out.SelectEvents.SelectEvents = []
 
 
-# pick decay channel at gen level
-if signalMC:
-    process.load("TopQuarkAnalysis.TopEventProducers.sequences.ttGenEvent_cff")
-    process.load("TopQuarkAnalysis.TopEventProducers.producers.TtDecaySelection_cfi")
-    process.ttDilFilter = process.ttDecaySelection.clone()
-    process.ttDilFilter.allowedTopDecays.decayBranchA.electron = True
-    process.ttDilFilter.allowedTopDecays.decayBranchA.muon     = True
-    process.ttDilFilter.allowedTopDecays.decayBranchA.tau      = False
-
-    process.ttDilFilter.allowedTopDecays.decayBranchB.electron = True
-    process.ttDilFilter.allowedTopDecays.decayBranchB.muon     = True
-    process.ttDilFilter.allowedTopDecays.decayBranchB.tau     = False
-    process.ttDilFilter.restrictTauDecays.leptonic = cms.bool(True)
-elif TauMC:
-    process.load("TopQuarkAnalysis.TopEventProducers.sequences.ttGenEvent_cff")
-    process.load("TopQuarkAnalysis.TopEventProducers.producers.TtDecaySelection_cfi")
-    process.ttDilFilter = process.ttDecaySelection.clone()
-    process.ttDilFilter.allowedTopDecays.decayBranchA.electron = False
-    process.ttDilFilter.allowedTopDecays.decayBranchA.muon     = False
-    process.ttDilFilter.allowedTopDecays.decayBranchA.tau      = True
-
-    process.ttDilFilter.allowedTopDecays.decayBranchB.electron = True
-    process.ttDilFilter.allowedTopDecays.decayBranchB.muon     = True
-    process.ttDilFilter.allowedTopDecays.decayBranchB.tau     = True
-    process.ttDilFilter.restrictTauDecays.leptonic = cms.bool(True)
-
-elif TopNonDilMC:
-    process.load("TopQuarkAnalysis.TopEventProducers.sequences.ttGenEvent_cff")
-    process.load("TopQuarkAnalysis.TopEventProducers.producers.TtDecaySelection_cfi")
-    process.ttDilFilter = process.ttDecaySelection.clone()
-    process.ttDilFilter.allowedTopDecays.decayBranchA.electron = True
-    process.ttDilFilter.allowedTopDecays.decayBranchA.muon     = True
-    process.ttDilFilter.allowedTopDecays.decayBranchA.tau      = True
-
-    process.ttDilFilter.allowedTopDecays.decayBranchB.electron = True
-    process.ttDilFilter.allowedTopDecays.decayBranchB.muon     = True
-    process.ttDilFilter.allowedTopDecays.decayBranchB.tau     = True
-    process.ttDilFilter.restrictTauDecays.leptonic = cms.bool(True)
-    process.ttDilFilter.invert = True
-
-# event cleaning
+# met filters
+# https://twiki.cern.ch/twiki/bin/viewauth/CMS/MissingETOptionalFilters
 from CommonTools.RecoAlgos.HBHENoiseFilter_cfi import *
-process.HBHENoiseFilter = HBHENoiseFilter
-# s. https://hypernews.cern.ch/HyperNews/CMS/get/JetMET/1196.html
-HBHENoiseFilter.minIsolatedNoiseSumE        = 999999.
-HBHENoiseFilter.minNumIsolatedNoiseChannels = 999999
-HBHENoiseFilter.minIsolatedNoiseSumEt       = 999999.
+from RecoMET.METFilters.CSCTightHaloFilter_cfi import *
+from RecoMET.METFilters.hcalLaserEventFilter_cfi import *
+from RecoMET.METFilters.EcalDeadCellTriggerPrimitiveFilter_cfi import *
+from RecoMET.METFilters.eeBadScFilter_cfi import *
+from RecoMET.METFilters.trackingFailureFilter_cfi import *
+from RecoMET.METFilters.trackingPOGFilters_cff import *
+process.metFilters = cms.Sequence(
+      HBHENoiseFilter *
+      CSCTightHaloFilter *
+      hcalLaserEventFilter *
+      EcalDeadCellTriggerPrimitiveFilter *
+      goodVertices * trackingFailureFilter *
+      eeBadScFilter *
+      ecalLaserCorrFilter *
+      trkPOGFilters
+)
 
+# scraping filter for data only
 process.scrapingFilter = cms.EDFilter(
   "FilterOutScraping"
 , applyfilter = cms.untracked.bool( True )
@@ -196,32 +147,6 @@ process.scrapingFilter = cms.EDFilter(
 , numtrack    = cms.untracked.uint32( 10 )
 , thresh      = cms.untracked.double( 0.25 )
 )
-
-process.eventCleaning = cms.Sequence(
-  process.HBHENoiseFilter
-+ process.scrapingFilter
-)
-
-# primary vertex selection
-#pvSelection = cms.PSet(
-#  minNdof = cms.double( 4. )
-#, maxZ    = cms.double( 24. )
-#, maxRho  = cms.double( 2. )
-#)
-
-#process.goodOfflinePrimaryVertices = cms.EDFilter(
-#  "PrimaryVertexObjectFilter" # checks for fake PVs automatically
-#, filterParams = pvSelection
-#, filter       = cms.bool( False ) # use only as producer
-#, src          = cms.InputTag( 'offlinePrimaryVertices' )
-#)
-
-#process.goodOfflinePrimaryVertexFilter = cms.EDFilter(
-#  "PrimaryVertexFilter" # checks for fake PVs automatically
-#, pvSelection
-#, NPV = cms.int32( 1 )
-#, pvSrc = cms.InputTag( 'goodOfflinePrimaryVertices' )
-#)
 
 process.goodOfflinePrimaryVertices = cms.EDFilter( "PrimaryVertexObjectFilter",
       filterParams = cms.PSet(
@@ -233,7 +158,6 @@ process.goodOfflinePrimaryVertices = cms.EDFilter( "PrimaryVertexObjectFilter",
       src = cms.InputTag( 'offlinePrimaryVertices' )
       )
 
-#process.vertexing = cms.Sequence(process.goodOfflinePrimaryVertices*process.goodOfflinePrimaryVertexFilter)
 process.vertexing = cms.Sequence(process.goodOfflinePrimaryVertices)
 
 
@@ -273,11 +197,11 @@ applyPostfix( process, 'pfPileUp', postfix ).checkClosestZVertex = False
 # jet configuration
 jetCutPF = 'pt>30 & abs(eta)<2.5'
 jetCutPF += ' && numberOfDaughters > 1'                                  # PF jet ID:
-jetCutPF += ' && chargedEmEnergyFraction < 0.99'                         # PF jet ID:
 jetCutPF += ' && neutralHadronEnergyFraction < 0.99'                     # PF jet ID:
 jetCutPF += ' && neutralEmEnergyFraction < 0.99'                         # PF jet ID:
 jetCutPF += ' && (chargedHadronEnergyFraction > 0. || abs(eta) >= 2.4)'  # PF jet ID:
 jetCutPF += ' && (chargedMultiplicity > 0 || abs(eta) >= 2.4)'           # PF jet ID:
+jetCutPF += ' && (chargedEmEnergyFraction < 0.99 || abs(eta) >= 2.4)'    # PF jet ID:
 
 applyPostfix( process, 'pfJets', postfix ).doAreaFastjet = True
 applyPostfix( process, 'pfJets', postfix ).doRhoFastjet  = False
@@ -449,7 +373,7 @@ process.step3 = cms.EDFilter("CandViewCountFilter",
 )
 
 
-# MET filter
+# MET cut
 process.highMET = cms.EDFilter("CandViewSelector",
     src = cms.InputTag("patMETs"+postfix),
     cut = cms.string("pt>40")
@@ -460,22 +384,10 @@ process.highMETFilter = cms.EDFilter("CandViewCountFilter",
     minNumber = cms.uint32(1)
 )
 
-#process.highMETemu = cms.EDFilter("CandViewSelector",
-#    src = cms.InputTag("patMETs"+postfix),
-#    cut = cms.string("pt>20")
-#)
-
-#process.highMETFilteremu = cms.EDFilter("CandViewCountFilter",
-#    src = cms.InputTag("highMETemu"),
-#    minNumber = cms.uint32(1)
-#)
-
-
 process.step4 = cms.Sequence(process.highMET*process.highMETFilter)
-process.step4emu = cms.Sequence() #process.highMETemu*process.highMETFilteremu)
+process.step4emu = cms.Sequence()
 
 # trigger filter
-#trigger_paths = ["HLT_Mu17_Mu8_v","HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v","HLT_Mu17_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v*","HLT_Mu8_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v*"]
 trigger_pattern = [path+"*" for path in trigger_paths]
 
 from HLTrigger.HLTfilters.hltHighLevel_cfi import *
@@ -485,17 +397,6 @@ process.triggerSelection = hltHighLevel.clone(
       throw=False
       )
 
-# diagnostic stuff
-# process.TFileService = cms.Service("TFileService",
-#     fileName = cms.string('analyzeTopMuon.root')
-# )
-# process.load("TopQuarkAnalysis.Examples.TopJetAnalyzer_cfi")
-# process.analyzeJet.input = "selectedPatJets"+postfix
-# process.load("TopQuarkAnalysis.Examples.TopMuonAnalyzer_cfi")
-# process.analyzeMuon.input = "selectedPatMuons"+postfix
-# 
-# process.load("BsmMasses.PrintMET.printmet_cfi")
-
 # Scheduling
 process.p_ee = cms.Path()
 process.p_emu = cms.Path()
@@ -503,17 +404,19 @@ process.p_mumu = cms.Path()
 
 process.p_common = cms.Sequence()
 
-if signalMC or TauMC or TopNonDilMC:
+if runOnMC:
     process.p_ee += process.makeGenEvt
     process.p_emu += process.makeGenEvt
     process.p_mumu += process.makeGenEvt
-    process.p_ee += process.ttDilFilter
-    process.p_emu += process.ttDilFilter
-    process.p_mumu += process.ttDilFilter
 
-process.p_ee += process.eventCleaning
-process.p_emu += process.eventCleaning
-process.p_mumu += process.eventCleaning
+process.p_ee += process.metFilters
+process.p_emu += process.metFilters
+process.p_mumu += process.metFilters
+
+if not runOnMC:
+    process.p_ee += process.scrapingFilter
+    process.p_emu += process.scrapingFilter
+    process.p_mumu += process.scrapingFilter
 
 process.p_ee += process.vertexing
 process.p_emu += process.vertexing
@@ -537,10 +440,6 @@ process.p_mumu += process.step2mumu
 process.p_ee += process.step3
 process.p_emu += process.step3
 process.p_mumu += process.step3
-
-# process.p_mumu += process.analyzeMuon
-# process.p_mumu += process.analyzeJet
-# process.p_mumu += process.printMET
 
 process.p_ee += process.step4
 process.p_mumu += process.step4

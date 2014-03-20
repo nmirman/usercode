@@ -1,9 +1,9 @@
 #!/bin/bash
 
-date="20130708"
+date="20140216"
 
 crabdir[0]="crab_TopMassSkim_mc_${date}"
-crabdir[1]="crab_TopMassSkim_data_${date}"
+#crabdir[1]="crab_TopMassSkim_data_${date}"
 
 count=0
 end_job=""

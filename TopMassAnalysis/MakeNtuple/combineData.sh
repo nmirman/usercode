@@ -1,7 +1,7 @@
 #!/bin/bash
 
-crabout="/eos/uscms/store/user/caust78/CRABjobs/crab_TopMassNtuple_data_20130625/"
-ntuple="/eos/uscms/store/user/caust78/Ntuples/20130625/"
+crabout="/eos/uscms/store/user/nmirman/CRABjobs/crab_TopMassNtuple_data_20140223/"
+ntuple="/eos/uscms/store/user/nmirman/Ntuples/TopMass/20140223/"
 
 filelist=""
 for dir in `ls ${crabout}`
@@ -9,7 +9,7 @@ do
 
    echo "Opening ${crabout}/${dir}"
 
-   numfiles=`ls -l ${crabout}/${dir} | wc -l`
+   numfiles=`ls -l ${crabout}/${dir} | grep root | wc -l`
 
    for i in `seq $numfiles`
    do
@@ -23,5 +23,6 @@ do
 done
 
 hadd ~/nobackup/Data.root ${filelist}
+mkdir ${ntuple}
 mv ~/nobackup/Data.root ${ntuple}
 
