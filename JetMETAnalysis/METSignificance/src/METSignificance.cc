@@ -116,21 +116,21 @@ METSignificance::METSignificance(const edm::ParameterSet& iConfig)
 
    jetThreshold_ = iConfig.getParameter<double>("jetThreshold");
    if( runOnMC_ ){
-      parA1 = 1.12660;
-      parA2 = 1.09322;
-      parA3 = 1.10951;
-      parA4 = 1.17178;
-      parA5 = 1.12164;
-      parN1 = 0.0;
-      parS1 = 0.585145;
+      parA1 = 1.05347;
+      parA2 = 0.975375;
+      parA3 = 0.957986;
+      parA4 = 0.972690;
+      parA5 = 1.28106;
+      parN1 = -1.10982;
+      parS1 = 0.520390;
    } else {
-      parA1 = 1.39669;
-      parA2 = 1.32037;
-      parA3 = 1.32047;
-      parA4 = 1.38161;
-      parA5 = 1.51508;
+      parA1 = 1.15061;
+      parA2 = 1.07776;
+      parA3 = 1.04204;
+      parA4 = 1.12509;
+      parA5 = 1.56414;
       parN1 = 0.0;
-      parS1 = 0.639158;
+      parS1 = 0.548758;
    }
 
    std::string alg  = iConfig.getParameter<std::string>("jetResAlgo");
