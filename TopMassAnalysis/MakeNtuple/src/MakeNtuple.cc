@@ -454,13 +454,14 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   if (goodLeptons_.size() < 2) return;
   const reco::RecoCandidate* lep1 = goodLeptons_[0];
   const reco::RecoCandidate* lep2 = goodLeptons_[1];
-
+  
   // get met
   edm::Handle<edm::View<pat::MET> > mets;
   iEvent.getByLabel(metTag_, mets);
   pat::MET met = mets->front();
   
   // apply MET cut
+  /*
   if (doMETCut_) {
 	  if (abs(lep1->pdgId()) == abs(lep2->pdgId())) {
 		  if (met.et() < 30.) return;
@@ -468,6 +469,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 	  	  if (met.et() < 20. ) return;
 	  }
   }
+  */
 
   // Now set the variables we haven't set yet.
   jet1FourVector.SetPxPyPzE(jet1.px(), jet1.py(), jet1.pz(), jet1.energy());

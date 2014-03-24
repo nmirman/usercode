@@ -14,8 +14,9 @@ options.setDefault( 'outputFile',
 options.setDefault( 'inputFiles',
                     #'/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root')
                     #'/store/mc/Summer12_DR53X/TTJets_MassiveBinDECAY_TuneZ2star_8TeV-madgraph-tauola/AODSIM/PU_S10_START53_V7A-v1/0000/FE4C2F81-D0E1-E111-9080-0030487E0A2D.root'
-                    '/store/caf/user/tjkim/mc/Summer12_DR53X/TTJets_FullLeptMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v2/00000/000C5D15-AB1A-E211-8BDE-00215E22053A.root',
-                    '/store/caf/user/tjkim/mc/Summer12_DR53X/TTJets_FullLeptMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v2/00000/0010005A-421A-E211-9E3C-E41F13181DA4.root'
+                    #'/store/caf/user/tjkim/mc/Summer12_DR53X/TTJets_FullLeptMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v2/00000/000C5D15-AB1A-E211-8BDE-00215E22053A.root',
+                    #'/store/caf/user/tjkim/mc/Summer12_DR53X/TTJets_FullLeptMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v2/00000/0010005A-421A-E211-9E3C-E41F13181DA4.root'
+                    'root://xrootd.unl.edu//store/mc/Summer12_DR53X/TTJets_MassiveBinDECAY_TuneZ2star_8TeV-madgraph-tauola/AODSIM/PU_S10_START53_V7A-v1/0000/001C868B-B2E1-E111-9BE3-003048D4DCD8.root'
                     )
 
 options.register( 'inputType',
@@ -36,6 +37,13 @@ options.register( 'dataType',
                   VarParsing.multiplicity.singleton,
                   VarParsing.varType.string,
                   'Type of data file.'
+                  )
+
+options.register( 'keepAllEvts',
+                  False,
+                  VarParsing.multiplicity.singleton,
+                  VarParsing.varType.bool,
+                  'Flag to remove event filters.'
                   )
 
 options.register( 'wantSummary',
@@ -121,22 +129,24 @@ process.out.SelectEvents.SelectEvents = []
 
 # met filters
 # https://twiki.cern.ch/twiki/bin/viewauth/CMS/MissingETOptionalFilters
-from CommonTools.RecoAlgos.HBHENoiseFilter_cfi import *
-from RecoMET.METFilters.CSCTightHaloFilter_cfi import *
-from RecoMET.METFilters.hcalLaserEventFilter_cfi import *
-from RecoMET.METFilters.EcalDeadCellTriggerPrimitiveFilter_cfi import *
-from RecoMET.METFilters.eeBadScFilter_cfi import *
-from RecoMET.METFilters.trackingFailureFilter_cfi import *
-from RecoMET.METFilters.trackingPOGFilters_cff import *
+process.load('CommonTools.RecoAlgos.HBHENoiseFilter_cfi')
+process.load('RecoMET.METAnalyzers.CSCHaloFilter_cfi')
+process.load('RecoMET.METFilters.hcalLaserEventFilter_cfi')
+process.load('RecoMET.METFilters.EcalDeadCellTriggerPrimitiveFilter_cfi')
+process.load('RecoMET.METFilters.eeBadScFilter_cfi')
+process.load('RecoMET.METFilters.ecalLaserCorrFilter_cfi')
+process.load('RecoMET.METFilters.trackingFailureFilter_cfi')
+process.trackingFailureFilter.VertexSource = cms.InputTag('goodOfflinePrimaryVertices')
+process.load('RecoMET.METFilters.trackingPOGFilters_cff')
 process.metFilters = cms.Sequence(
-      HBHENoiseFilter *
-      CSCTightHaloFilter *
-      hcalLaserEventFilter *
-      EcalDeadCellTriggerPrimitiveFilter *
-      goodVertices * trackingFailureFilter *
-      eeBadScFilter *
-      ecalLaserCorrFilter *
-      trkPOGFilters
+      process.HBHENoiseFilter *
+      process.CSCTightHaloFilter *
+      process.hcalLaserEventFilter *
+      process.EcalDeadCellTriggerPrimitiveFilter *
+      process.trackingFailureFilter *
+      process.eeBadScFilter *
+      process.ecalLaserCorrFilter *
+      process.trkPOGFilters
 )
 
 # scraping filter for data only
@@ -300,19 +310,6 @@ if runOnMC:
                                   ]
 
 
-# stuff for running L1FastJet
-from RecoJets.Configuration.RecoPFJets_cff import kt6PFJets
-kt6PFJetsPFChs = kt6PFJets.clone( src = cms.InputTag( 'pfNoElectron'+postfix )
-                                , doAreaFastjet = cms.bool( True )
-                                , doRhoFastjet  = cms.bool( True ) )
-setattr( process, 'kt6PFJetsChs' + postfix, kt6PFJetsPFChs )
-getattr( process, 'patPF2PATSequence' + postfix).replace( getattr( process, 'patJetCorrFactors' + postfix )
-                                                        , getattr( process, 'kt6PFJetsChs' + postfix ) * getattr( process, 'patJetCorrFactors' + postfix )
-                                                        )
-applyPostfix( process, 'patJetCorrFactors', postfix ).rho = cms.InputTag( 'kt6PFJetsChs' + postfix, 'rho' )
-process.out.outputCommands.append( 'keep double_*' + postfix + '*_*_' + process.name_() )
-
-
 # pair selection
 process.eePair = cms.EDProducer("CandViewShallowCloneCombiner",
     decay = cms.string("selectedPatElectrons"+postfix+"@- selectedPatElectrons"+postfix+"@+"),
@@ -373,9 +370,20 @@ process.step3 = cms.EDFilter("CandViewCountFilter",
 )
 
 
+# type-1 corrected MET -- run w/ process.producePFMETCorrections
+process.load("JetMETCorrections.Type1MET.pfMETCorrections_cff")
+if not runOnMC:
+         process.pfJetMETcorr.jetCorrLabel = cms.string("ak5PFL1FastL2L3Residual")
+
+process.pfType1CorrectedMetPFlow = process.pfType1CorrectedMet.clone(
+      src = cms.InputTag("pfMET"+postfix)
+      )
+
 # MET cut
 process.highMET = cms.EDFilter("CandViewSelector",
-    src = cms.InputTag("patMETs"+postfix),
+    #src = cms.InputTag("patMETs"+postfix),
+    #src = cms.InputTag("pfType1CorrectedMetPFLow"),
+    src = cms.InputTag("pfType1CorrectedMet"),
     cut = cms.string("pt>40")
 )
 
@@ -402,22 +410,6 @@ process.p_ee = cms.Path()
 process.p_emu = cms.Path()
 process.p_mumu = cms.Path()
 
-process.p_common = cms.Sequence()
-
-if runOnMC:
-    process.p_ee += process.makeGenEvt
-    process.p_emu += process.makeGenEvt
-    process.p_mumu += process.makeGenEvt
-
-process.p_ee += process.metFilters
-process.p_emu += process.metFilters
-process.p_mumu += process.metFilters
-
-if not runOnMC:
-    process.p_ee += process.scrapingFilter
-    process.p_emu += process.scrapingFilter
-    process.p_mumu += process.scrapingFilter
-
 process.p_ee += process.vertexing
 process.p_emu += process.vertexing
 process.p_mumu += process.vertexing
@@ -425,6 +417,15 @@ process.p_mumu += process.vertexing
 process.p_ee += getattr( process, 'patPF2PATSequence' + postfix )
 process.p_emu += getattr( process, 'patPF2PATSequence' + postfix )
 process.p_mumu += getattr( process, 'patPF2PATSequence' + postfix )
+
+if not runOnMC:
+    process.p_ee += process.scrapingFilter
+    process.p_emu += process.scrapingFilter
+    process.p_mumu += process.scrapingFilter
+
+process.p_ee += process.metFilters
+process.p_emu += process.metFilters
+process.p_mumu += process.metFilters
 
 process.p_ee += process.pfIdentifiedElectrons
 process.p_emu += process.pfIdentifiedElectrons
@@ -441,6 +442,10 @@ process.p_ee += process.step3
 process.p_emu += process.step3
 process.p_mumu += process.step3
 
+process.p_ee += process.producePFMETCorrections
+process.p_emu += process.producePFMETCorrections
+process.p_mumu += process.producePFMETCorrections
+
 process.p_ee += process.step4
 process.p_mumu += process.step4
 process.p_emu += process.step4emu
@@ -452,6 +457,10 @@ process.p_emu += process.triggerSelection
 process.out.SelectEvents.SelectEvents.append( 'p_mumu' )
 process.out.SelectEvents.SelectEvents.append( 'p_emu' )
 process.out.SelectEvents.SelectEvents.append( 'p_ee' )
+
+if options.keepAllEvts:
+   print 'KEEPING ALL EVENTS'
+   process.out.SelectEvents.SelectEvents = []
 
 # process.out.outputCommands.append( 'keep *' )
 
