@@ -72,6 +72,8 @@ class METSignificance : public edm::EDProducer {
       edm::InputTag muonTag_;
       edm::InputTag electronTag_;
       edm::InputTag pfjetsTag_;
+      std::vector<edm::InputTag> metsTag_;
+      Int_t metsSize_;
 
       std::string pfjetCorrectorL1_;
       std::string pfjetCorrectorL123_;
@@ -111,6 +113,9 @@ METSignificance::METSignificance(const edm::ParameterSet& iConfig)
    pfjetsTag_    = iConfig.getUntrackedParameter<edm::InputTag>("pfjetsTag");
    pfjetCorrectorL1_  = iConfig.getUntrackedParameter<std::string>("pfjetCorrectorL1");
    pfjetCorrectorL123_ = iConfig.getUntrackedParameter<std::string>("pfjetCorrectorL123");
+
+   metsTag_ = iConfig.getUntrackedParameter<std::vector<edm::InputTag> >("metsTag");
+   metsSize_ = metsTag_.size();
 
    runOnMC_ = iConfig.getUntrackedParameter<bool>("runOnMC");
 
@@ -238,22 +243,22 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
       double jptL123 = (jpt*jcorrl123 > 10) ? jpt*jcorrl123 : jpt;
       double jptT1 = (jpt*jcorrl123 > 10) ? jpt*(jcorrl123+1-jcorrl1) : jpt;
 
+      // jet energy resolutions
+      double jeta_res = (fabs(jeta) < 9.9) ? jeta : 9.89; // JetResolutions defined for |eta|<9.9
+      TF1* fPtEta    = ptRes_ -> parameterEta("sigma",jeta_res);
+      TF1* fPhiEta   = phiRes_-> parameterEta("sigma",jeta_res);
+      double sigmapt = fPtEta->Eval(jptL123);
+      double sigmaphi = fPhiEta->Eval(jptL123);
+      delete fPtEta;
+      delete fPhiEta;
+
       met_px -= c*jptT1;
       met_py -= s*jptT1;
 
       // split into high-pt and low-pt sector
       if( jptL123 > jetThreshold_ ){
          // high-pt jets enter into the covariance matrix via JER
-
-	// jet energy resolutions
-	double jeta_res = (fabs(jeta) < 9.9) ? jeta : 9.89; // JetResolutions defined for |eta|<9.9
-	TF1* fPtEta    = ptRes_ -> parameterEta("sigma",jeta_res);
-	TF1* fPhiEta   = phiRes_-> parameterEta("sigma",jeta_res);
-	double sigmapt = fPtEta->Eval(jptL123);
-	double sigmaphi = fPhiEta->Eval(jptL123);
-	delete fPtEta;
-	delete fPhiEta;
-               
+         
          double scale = 0;
          if(feta<0.5) scale = parA1;
          else if(feta<1.1) scale = parA2;
@@ -282,6 +287,13 @@ METSignificance::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
    // contribution to covariance matrix from pseudo-jet
    cov_xx += parN1*parN1 + parS1*parS1*pjet_scalpt;
    cov_yy += parN1*parN1 + parS1*parS1*pjet_scalpt;
+
+   // met
+   edm::Handle<edm::View<reco::MET> > metHandle;
+   iEvent.getByLabel(metsTag_[4], metHandle); // use all corrections (4)
+   reco::MET metiter = (*metHandle)[0];
+   met_px = metiter.px();
+   met_py = metiter.py();
 
    //
    // compute significance

@@ -51,7 +51,7 @@ else :
 
 if not ( options.channel == 'Zmumu' or options.channel == 'Wenu' or options.channel == 'Wenu_loose'
       or options.channel == 'Dijet' or options.channel == 'Ttbar0lept'
-      or options.channel == 'Ttbar1lept' ) :
+      or options.channel == 'Ttbar1lept' or options.channel == 'Ttbar1lept_RunA' ) :
    sys.exit('Invalid channel.')
 
 
@@ -69,8 +69,8 @@ process.source = cms.Source("PoolSource",
          #'/store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root'
          #'/store/mc/Summer12_DR53X/WJetsToLNu_TuneZ2Star_8TeV-madgraph-tarball/AODSIM/PU_S10_START53_V7A-v2/0000/000869F4-59EE-E111-9BF6-003048D47752.root'
          #'/store/data/Run2012A/SingleElectron/AOD/13Jul2012-v1/0000/001A2EB8-47D4-E111-B527-003048679070.root'
-         '/store/mc/Summer12_DR53X/TTJets_HadronicMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v1/00000/002A756C-FA15-E211-9FA6-485B39800B75.root'
-         #'/store/data/Run2012A/DoubleMu/AOD/22Jan2013-v1/20000/001AE30A-BA81-E211-BBE7-003048FFD770.root'
+         #'/store/mc/Summer12_DR53X/TTJets_HadronicMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v1/00000/002A756C-FA15-E211-9FA6-485B39800B75.root'
+         'root://xrootd.unl.edu//store/data/Run2012A/DoubleMu/AOD/22Jan2013-v1/20000/001AE30A-BA81-E211-BBE7-003048FFD770.root'
          #'/store/data/Run2012D/SingleElectron/AOD/22Jan2013-v1/10000/000D8CF0-D999-E211-A1E0-002590593920.root'
          )
       )
@@ -213,9 +213,17 @@ if options.channel == 'Dijet':
 if options.channel == 'Ttbar0lept':
    trigger_paths = ["HLT_SixJet45_v"]
 if options.channel == 'Ttbar1lept':
-   trigger_paths= ["HLT_Ele25_CaloIdVT_CaloIsoT_TrkIdT_TrkIsoT_CentralPFNoPuJet30_BTagIPIter_v",
+   trigger_paths = ["HLT_Ele25_CaloIdVT_CaloIsoT_TrkIdT_TrkIsoT_CentralPFNoPuJet30_BTagIPIter_v",
          "HLT_IsoMu17_eta2p1_CentralPFNoPUJet30_BTagIPIter_v"]
+if options.channel == 'Ttbar1lept_RunA':
+   trigger_paths = ["HLT_Ele25_CaloIdVT_CaloIsoT_TrkIdT_TrkIsoT_CentralPFJet30_BTagIPIter_v",
+         "HLT_Ele25_CaloIdVT_CaloIsoT_TrkIdT_TrkIsoT_CentralPFNoPuJet30_BTagIPIter_v",
+         "HLT_IsoMu20_eta2p1_CentralPFJet30_BTagIPIter_v",
+         "HLT_IsoMu20_eta2p1_CentralPFNoPUJet30_BTagIPIter_v"]
 trigger_pattern = [path+"*" for path in trigger_paths]
+
+if options.channel == 'Ttbar1lept_RunA':
+   options.channel = 'Ttbar1lept'
 
 process.demo = cms.EDAnalyzer('METSigNtuple',
       runOnMC              = cms.untracked.bool(options.runOnMC),
@@ -373,6 +381,7 @@ process.load("JetMETAnalysis.METSignificance.metsignificance_cfi")
 process.pfMetSig.runOnMC = options.runOnMC
 if not options.runOnMC:
       process.pfMetSig.pfjetCorrectorL123 = 'ak5PFL1FastL2L3Residual'
+process.pfMetSig.metsTag = cms.untracked.VInputTag(metList)
 
 process.mypf2pat = cms.Sequence()
 if options.channel == 'Zmumu':
