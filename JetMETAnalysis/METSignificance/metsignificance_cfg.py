@@ -10,11 +10,12 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(10) )
 process.source = cms.Source("PoolSource",
     # replace 'myfile.root' with the source file you want to use
     fileNames = cms.untracked.vstring(
-       'root://xrootd.unl.edu//store/data/Run2012D/DoubleMu/AOD/16Jan2013-v2/10000/00A4899E-666B-E211-A2AC-E0CB4E29C50D.root'
+       'root://xrootd.unl.edu//store/data/Run2012A/DoubleMu/AOD/22Jan2013-v1/20000/001AE30A-BA81-E211-BBE7-003048FFD770.root'
     )
 )
 
 process.load("Configuration.Geometry.GeometryIdeal_cff")
+process.load("Configuration.StandardSequences.MagneticField_cff")
 process.load("JetMETCorrections.Configuration.DefaultJEC_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 process.GlobalTag.globaltag = ( 'FT_P_V43E_AN3::All' )
