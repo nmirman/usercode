@@ -34,9 +34,11 @@ if not isMC:
 process.load("CommonTools.ParticleFlow.PF2PAT_cff")
 process.pfPileUp.Enable = False
 
-process.pfAllMuons.src="particleFlow"
+process.pfAllMuons.src="particleFlowPtrs"
 process.pfMuonsFromVertex.dzCut=9999
-process.pfNoMuon.bottomCollection   = "particleFlow"
+process.pfNoMuon.bottomCollection   = "particleFlowPtrs"
+
+process.pfJets.srcPVs = cms.InputTag("offlinePrimaryVertices")
 process.pfJets.doAreaFastjet        = True
 process.pfJets.jetPtMin             = 0
 process.pfJets.src                  = "pfNoElectron"
@@ -45,11 +47,10 @@ process.load("RecoJets.JetProducers.ak5PFJets_cfi")
 process.ak5PFJets.doAreaFastjet = cms.bool(True)
 
 process.mypf2pat = cms.Sequence(
+      process.particleFlowPtrs *
       process.pfNoPileUpSequence * # pfPileUp enable is false
       process.pfParticleSelectionSequence *
-      process.pfAllMuons * 
-      process.pfMuonsFromVertex *
-      process.pfSelectedMuons *
+      process.pfMuonSequence *
       process.pfNoMuon *
       process.pfElectronSequence *
       process.pfNoElectron *
@@ -84,9 +85,9 @@ process.producePFMETCorrectionsType0.replace(
 # x/y shift corrections
 process.load("JetMETCorrections.Type1MET.pfMETsysShiftCorrections_cfi")
 if not isMC:
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_data
 if isMC:
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_mc
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_mc
 
 process.pfType1CorrectedMetXYshift = process.pfType1CorrectedMet.clone(
       srcType1Corrections = cms.VInputTag(

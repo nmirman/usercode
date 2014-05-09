@@ -3,8 +3,8 @@ import FWCore.ParameterSet.Config as cms
 pfMetSig = cms.EDProducer('METSignificance',
       runOnMC = cms.untracked.bool(True),
 
-      muonTag              = cms.untracked.InputTag('pfSelectedMuons'),
-      electronTag          = cms.untracked.InputTag('pfSelectedElectrons'),
+      muonTag              = cms.untracked.InputTag('pfIsolatedMuons'),
+      electronTag          = cms.untracked.InputTag('pfIsolatedElectrons'),
 
       pfjetsTag            = cms.untracked.InputTag('pfJets'),
       pfjetCorrectorL1     = cms.untracked.string('ak5PFL1Fastjet'),
