@@ -1,0 +1,12 @@
+universe = vanilla
+Executable = run_ntuple.sh
+Requirements = Memory >= 199 &&OpSys == "LINUX"&& (Arch != "DUMMY" )&& Disk > 1000000 && FileSystemDomain != "DUMMY"
+Should_Transfer_Files = YES
+WhenToTransferOutput = ON_EXIT
+Output = condorlogs/condor_$(Cluster)_$(Process).stdout
+Error = condorlogs/condor_$(Cluster)_$(Process).stderr
+Log = condorlogs/condor_$(Cluster)_$(Process).log
+Arguments = 1 $(Process)
+notify_user = ${LOGNAME}@FNAL.GOV
+notification = ERROR
+Queue 40
