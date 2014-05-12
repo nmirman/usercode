@@ -5,6 +5,7 @@ makentuple = cms.EDAnalyzer('MakeNtuple',
     electronSrc = cms.InputTag('selectedPatElectronsPFlow'),
     jetSrc = cms.InputTag('selectedPatJetsPFlow'),
     metSrc = cms.InputTag('patMETsPFlow'),
+    #metSrc = cms.InputTag('pfType1CorrectedMet'),
     jetScale = cms.double( 0. ),
     jetResScale = cms.double( 1.1 ), # nominal value is actually 1.1*value in db
     leptonScale = cms.double( 0. ),

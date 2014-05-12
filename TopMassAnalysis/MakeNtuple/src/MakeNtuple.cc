@@ -32,6 +32,7 @@
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Utilities/interface/InputTag.h"
+#include "FWCore/Framework/interface/Run.h"
 
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "DataFormats/JetReco/interface/GenJet.h"
@@ -41,6 +42,10 @@
 
 #include "DataFormats/PatCandidates/interface/MET.h"
 #include "PhysicsTools/Utilities/interface/LumiReWeighting.h"
+
+#include "SimDataFormats/GeneratorProducts/interface/GenEventInfoProduct.h"
+#include "SimDataFormats/GeneratorProducts/interface/GenRunInfoProduct.h"
+#include "SimDataFormats/GeneratorProducts/interface/HepMCProduct.h"
 #include "SimDataFormats/PileupSummaryInfo/interface/PileupSummaryInfo.h" 
 
 #include "JetMETCorrections/Objects/interface/JetCorrector.h"
@@ -52,6 +57,9 @@
 #include "TMatrix.h"
 #include "TTree.h"
 #include "TFile.h"
+
+#include <string>
+
 //
 // class declaration
 //
@@ -116,7 +124,7 @@ class MakeNtuple : public edm::EDAnalyzer {
       double jetScale_, leptonScale_, jetResScale_;
       std::string bTagger_;
       double bTagCut_, negTagCut_;
-		  bool doMETCut_, runOnMC_;
+		  bool doMETCut_, runOnMC_, runTtbar_;
       std::string outFileName_;
       JetSorter js;
 		  event_id this_event_id;
@@ -132,7 +140,8 @@ class MakeNtuple : public edm::EDAnalyzer {
       std::vector<pat::Jet> negTaggedJets_;
       std::vector<const reco::RecoCandidate*> goodLeptons_;
 
-      TTree *tree, *treeData, *treeBkg, *treeBkg2; // This will be a pointer to the tree we want to use for this event
+      // This will be a pointer to the tree we want to use for this event
+      TTree *tree, *treeData, *treeBkg, *treeBkg2;
       TFile *file;
 
       JetResolution *ptResol_;
@@ -162,7 +171,20 @@ class MakeNtuple : public edm::EDAnalyzer {
       int jetcount;
       double jet1Vz, jet2Vz;
       double jet1bdisc, jet2bdisc;
-      //double jet1VzCovariance, jet2VzCovariance;
+
+      static const double PU2012_MCf[60];
+      static const double PU2012_Dataf[60];
+      edm::LumiReWeighting LumiWeights_;
+      float MyWeight;
+      float T_nvertices;
+
+     int geninfo_pid;
+     float geninfo_pthat;
+     float geninfo_weight;
+     float geninfo_xsec;
+     float geninfo_eff;
+     float geninfo_alphaQCD;
+     float geninfo_alphaQED;
 
 };
 
@@ -186,6 +208,7 @@ bTagCut_ (iConfig.getParameter<double>("bTagCut")),
 negTagCut_ (iConfig.getParameter<double>("negTagCut")),
 doMETCut_ (iConfig.getParameter<bool>("doMETCut")),
 runOnMC_ (iConfig.getParameter<bool>("runOnMC")),
+runTtbar_ (iConfig.getParameter<bool>("runTtbar")),
 outFileName_ (iConfig.getParameter<std::string>("outFileName")),
 js (JetSorter(bTagger_)),
 metSignificanceMatrix (TMatrixD(2, 2)),
@@ -225,6 +248,136 @@ MakeNtuple::~MakeNtuple()
 // member functions
 //
 
+const double MakeNtuple::PU2012_Dataf[60] = {
+   // 'true' distribution for 2012 dataset
+   // obtained with pileupCalc.py (06.26.2013)
+   12260.8,
+   32850.4,
+   92330.3,
+   339464,
+   618478,
+   3.0497e+06,
+   1.77215e+07,
+   5.41421e+07,
+   1.30521e+08,
+   2.58981e+08,
+   4.46344e+08,
+   6.8564e+08,
+   8.81642e+08,
+   9.99085e+08,
+   1.07862e+09,
+   1.13797e+09,
+   1.17211e+09,
+   1.18207e+09,
+   1.17701e+09,
+   1.16108e+09,
+   1.13609e+09,
+   1.10481e+09,
+   1.06807e+09,
+   1.02107e+09,
+   9.55582e+08,
+   8.6706e+08,
+   7.58729e+08,
+   6.38851e+08,
+   5.16436e+08,
+   3.99862e+08,
+   2.96257e+08,
+   2.10055e+08,
+   1.42404e+08,
+   9.20546e+07,
+   5.65387e+07,
+   3.29089e+07,
+   1.815e+07,
+   9.51188e+06,
+   4.76417e+06,
+   2.29967e+06,
+   1.08138e+06,
+   501998,
+   233744,
+   111112,
+   54826,
+   28402.3,
+   15490.1,
+   8845.44,
+   5236.34,
+   3180.14,
+   1964.06,
+   1225.15,
+   767.779,
+   481.279,
+   300.644,
+   186.558,
+   114.687,
+   69.6938,
+   41.7929,
+   24.6979
+};
+
+const double MakeNtuple::PU2012_MCf[60] = {
+   // pileup distribution for Summer2012 MC
+   // obtained at https://twiki.cern.ch/twiki/bin/view/CMS/Pileup_MC_Gen_Scenarios
+   2.560E-06,
+   5.239E-06,
+   1.420E-05,
+   5.005E-05,
+   1.001E-04,
+   2.705E-04,
+   1.999E-03,
+   6.097E-03,
+   1.046E-02,
+   1.383E-02,
+   1.685E-02,
+   2.055E-02,
+   2.572E-02,
+   3.262E-02,
+   4.121E-02,
+   4.977E-02,
+   5.539E-02,
+   5.725E-02,
+   5.607E-02,
+   5.312E-02,
+   5.008E-02,
+   4.763E-02,
+   4.558E-02,
+   4.363E-02,
+   4.159E-02,
+   3.933E-02,
+   3.681E-02,
+   3.406E-02,
+   3.116E-02,
+   2.818E-02,
+   2.519E-02,
+   2.226E-02,
+   1.946E-02,
+   1.682E-02,
+   1.437E-02,
+   1.215E-02,
+   1.016E-02,
+   8.400E-03,
+   6.873E-03,
+   5.564E-03,
+   4.457E-03,
+   3.533E-03,
+   2.772E-03,
+   2.154E-03,
+   1.656E-03,
+   1.261E-03,
+   9.513E-04,
+   7.107E-04,
+   5.259E-04,
+   3.856E-04,
+   2.801E-04,
+   2.017E-04,
+   1.439E-04,
+   1.017E-04,
+   7.126E-05,
+   4.948E-05,
+   3.405E-05,
+   2.322E-05,
+   1.570E-05,
+   5.005E-06
+};  
+
 // ------------ method called for each event  ------------
 void
 MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
@@ -241,25 +394,53 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   negTaggedJets_.clear();
   goodLeptons_.clear();
 
+  // pile up reweighting
+  if( runOnMC_ ){
+
+     edm::Handle<GenEventInfoProduct> gi;
+     iEvent.getByLabel("generator", gi);
+
+     //edm::Handle< GenRunInfoProduct > genInfoProduct;
+     //iEvent.getRun().getByLabel("generator", genInfoProduct );
+
+     geninfo_pid   = (int)gi->signalProcessID();
+     geninfo_pthat = gi->qScale();
+     geninfo_weight   = gi->weight();
+     //geninfo_xsec  = genInfoProduct->crossSection();
+     //geninfo_eff   = genInfoProduct->filterEfficiency();
+     geninfo_xsec = -1;
+     geninfo_eff = -1;
+     geninfo_alphaQCD = gi->alphaQCD();
+     geninfo_alphaQED = gi->alphaQED();
+
+     std::vector<PileupSummaryInfo>::const_iterator PVI;
+     edm::Handle<std::vector<PileupSummaryInfo> > PupInfo;
+     iEvent.getByLabel("addPileupInfo", PupInfo);
+
+     float Tnvtx = -1.0;
+     for(PVI = PupInfo->begin(); PVI != PupInfo->end(); ++PVI) {
+
+        int BX = PVI->getBunchCrossing();
+
+        if(BX == 0) { 
+           Tnvtx = PVI->getTrueNumInteractions(); 
+           continue;
+        }
+
+        MyWeight = LumiWeights_.weight( Tnvtx );
+        T_nvertices = Tnvtx;
+     }
+
+  }
+
+  // get number of vertices
   double primary_vertex_z = 0;
-  // Retrieve number of vertices from PileUpInfo
-  if (runOnMC_) {
-	  edm::Handle<edm::View<PileupSummaryInfo> > PupInfo;
-	  iEvent.getByLabel("addPileupInfo","",PupInfo);
-	  vertices = 0;
-	  for(edm::View<PileupSummaryInfo>::const_iterator PVI = PupInfo->begin(); PVI!=PupInfo->end();++PVI){
-	    if ((PVI->getBunchCrossing())==0){ //this is intime only
-	      vertices += PVI->getPU_NumInteractions();
-	    }
-	  }
-  }
-  else {
-  	edm::Handle<std::vector<reco::Vertex> > goodVertices;
-		iEvent.getByLabel("goodOfflinePrimaryVertices", "", goodVertices);
-		vertices = goodVertices->size();
-		reco::Vertex primary_vertex = goodVertices->at(0);
-                primary_vertex_z = primary_vertex.z();
-  }
+  edm::Handle<std::vector<reco::Vertex> > goodVertices;
+  iEvent.getByLabel("goodOfflinePrimaryVertices", "", goodVertices);
+  vertices = goodVertices->size();
+  reco::Vertex primary_vertex = goodVertices->at(0);
+  primary_vertex_z = primary_vertex.z();
+
 
   // Get jets that pass the b tag cut
   edm::Handle<edm::View<pat::Jet> > jets;
@@ -317,7 +498,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   jet2GenId = 0;
   jet1ParentIdGEN = 0;
   jet2ParentIdGEN = 0;
-	if (runOnMC_) {
+	if (runTtbar_) {
 	  if (jet1.genJet()){
 	    jet1GenId = jet1.partonFlavour();
 	    jet1Gen = jet1.genJet();
@@ -407,7 +588,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
      nPdgIdGEN = n->pdgId();
      nbPdgIdGEN = nb->pdgId();
 
-	} // if runOnMC_
+	} // if runTtbar_
    else
    {
      bGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
@@ -457,21 +638,11 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   
   // get met
   edm::Handle<edm::View<pat::MET> > mets;
+  //edm::Handle<edm::View<reco::MET> > mets;
   iEvent.getByLabel(metTag_, mets);
   pat::MET met = mets->front();
   
-  // apply MET cut
-  /*
-  if (doMETCut_) {
-	  if (abs(lep1->pdgId()) == abs(lep2->pdgId())) {
-		  if (met.et() < 30.) return;
-	  } else {
-	  	  if (met.et() < 20. ) return;
-	  }
-  }
-  */
-
-  // Now set the variables we haven't set yet.
+   // Now set the variables we haven't set yet.
   jet1FourVector.SetPxPyPzE(jet1.px(), jet1.py(), jet1.pz(), jet1.energy());
   jet2FourVector.SetPxPyPzE(jet2.px(), jet2.py(), jet2.pz(), jet2.energy());
   uncorrectedJet1FourVector.SetPxPyPzE(jet1Uncor.px(), jet1Uncor.py(), jet1Uncor.pz(), jet1Uncor.energy());
@@ -481,24 +652,46 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   if (jet2Gen!=NULL) generatedJet2FourVector.SetPxPyPzE(jet2Gen->px(), jet2Gen->py(), jet2Gen->pz(), jet2Gen->energy());
   else generatedJet2FourVector.SetPxPyPzE(0, 0, 0, 0);
 
-    // apply a jet energy scale
-    edm::ESHandle<JetCorrectorParametersCollection> JetCorPars;
-    iSetup.get<JetCorrectionsRecord>().get("AK5PF",JetCorPars); 
-    JetCorrectorParameters const & JetCorPar = (*JetCorPars)["Uncertainty"];
-    JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty(JetCorPar);
+  // met
+  metFourVector.SetPxPyPzE(met.px(), met.py(), met.pz(), met.energy());
+
+    // jet energy scale uncertainty
+  std::string path = std::getenv("CMSSW_BASE");
+    JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( (path+"/src/PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt").c_str() );
+    double factor = 1;
+    double corr = 0;
     jecUnc->setJetEta(jet1.eta());
     jecUnc->setJetPt(jet1.pt());
-    if (jetScale_ != 0.) {
-       jet1FourVector *= 1+jetScale_*jecUnc->getUncertainty(true);
-    }
     jet1jesuncertainty = jecUnc->getUncertainty(true);
+    if (jetScale_ != 0.) {
+       // back out value of jec factor
+       factor = jet1Uncor.pt() != 0 ? jet1.pt() / jet1Uncor.pt() : 1.0;
+       jecUnc->setJetEta(jet1.eta());
+       jecUnc->setJetPt(jet1.pt());
+       corr = jetScale_*jecUnc->getUncertainty(true)/factor;
+       // correct met first
+       metFourVector -= jet1FourVector*corr;
+       jet1FourVector *= 1+corr;
+    }
     jecUnc->setJetEta(jet2.eta());
     jecUnc->setJetPt(jet2.pt());
-    if (jetScale_ != 0.) {
-       jet2FourVector *= 1+jetScale_*jecUnc->getUncertainty(true);
-    }
     jet2jesuncertainty = jecUnc->getUncertainty(true);
+    if (jetScale_ != 0.) {
+       factor = jet2Uncor.pt() != 0 ? jet2.pt() / jet2Uncor.pt() : 1.0;
+       jecUnc->setJetEta(jet2.eta());
+       jecUnc->setJetPt(jet2.pt());
+       corr = jetScale_*jecUnc->getUncertainty(true)/factor;
+       // correct met first
+       metFourVector -= jet2FourVector*corr;
+       jet2FourVector *= 1+corr;
+    }
     delete jecUnc;
+
+    //std::cout << "JES SCALE TEST: " << std::endl;
+    //std::cout << "jet1 pt, unc: " << jet1FourVector.Pt() << " " << jet1jesuncertainty << std::endl;
+    //std::cout << "jet2 pt, unc: " << jet2FourVector.Pt() << " " << jet2jesuncertainty << std::endl;
+    //std::cout << "met: " << metFourVector.Pt() << std::endl;
+    //fflush(stdout);
 
   numBJets = taggedJets_.size();
 
@@ -508,8 +701,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   PDG1 = lep1->pdgId();
   PDG2 = lep2->pdgId();
 
-  metFourVector.SetPxPyPzE(met.px(), met.py(), met.pz(), met.energy());
-	if (runOnMC_) {
+	if (runTtbar_) {
 	  generatedMetFourVector.SetPxPyPzE(met.genMET()->px(), met.genMET()->py(), met.genMET()->pz(), met.genMET()->energy());
 	}
   metSignificanceMatrix = met.getSignificanceMatrix();
@@ -522,6 +714,18 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 void 
 MakeNtuple::beginJob()
 {
+
+  // pile up reweighting
+  std::vector< float > PU2012_MC;
+  std::vector< float > PU2012_Data;
+
+  for( int i=0; i<60; i++) {
+     PU2012_MC.push_back( PU2012_MCf[i] );
+     PU2012_Data.push_back( PU2012_Dataf[i] );
+  }
+  LumiWeights_ = edm::LumiReWeighting( PU2012_MC, PU2012_Data);
+
+
   file = new TFile(outFileName_.c_str(), "RECREATE");
   file->cd();
   treeData = new TTree("RealData", "RealData");
@@ -566,11 +770,15 @@ MakeNtuple::beginJob()
   treeData->Branch("jet2bdisc",&jet2bdisc);
 
   if (runOnMC_) {
-	  treeData->Branch("jet1GenId", &jet1GenId);
-	  treeData->Branch("jet2GenId", &jet2GenId);
-	  treeData->Branch("generatedMetFourVector", &generatedMetFourVector);
-	  treeData->Branch("generatedJet1FourVector", &generatedJet1FourVector);
-	  treeData->Branch("generatedJet2FourVector", &generatedJet2FourVector);
+     treeData->Branch("puMyWeight", &MyWeight);
+     treeData->Branch("puTnvtx", &T_nvertices);
+  }
+  if (runTtbar_) {
+     treeData->Branch("jet1GenId", &jet1GenId);
+     treeData->Branch("jet2GenId", &jet2GenId);
+     treeData->Branch("generatedMetFourVector", &generatedMetFourVector);
+     treeData->Branch("generatedJet1FourVector", &generatedJet1FourVector);
+     treeData->Branch("generatedJet2FourVector", &generatedJet2FourVector);
      treeData->Branch("bGEN", &bGEN);
      treeData->Branch("bbarGEN", &bbarGEN);
      treeData->Branch("lpGEN", &lpGEN);
@@ -583,6 +791,13 @@ MakeNtuple::beginJob()
      treeData->Branch("nbPdgIdGEN", &nbPdgIdGEN);
      treeData->Branch("jet1ParentIdGEN", &jet1ParentIdGEN);
      treeData->Branch("jet2ParentIdGEN", &jet2ParentIdGEN);
+     treeData->Branch("geninfo_pid", &geninfo_pid);
+     treeData->Branch("geninfo_pthat", &geninfo_pthat);
+     treeData->Branch("geninfo_weight", &geninfo_weight);
+     treeData->Branch("geninfo_xsec", &geninfo_xsec);
+     treeData->Branch("geninfo_eff", &geninfo_eff);
+     treeData->Branch("geninfo_alphaQCD", &geninfo_alphaQCD);
+     treeData->Branch("geninfo_alphaQED", &geninfo_alphaQED);
   }
 
   treeData->Branch("run", &(this_event_id.run));
@@ -604,8 +819,8 @@ MakeNtuple::beginJob()
 void 
 MakeNtuple::endJob() 
 {
-  file->Write();
-  file->Close();
+   file->Write();
+   file->Close();
 }
 
 // ------------ method called when starting to processes a run  ------------
@@ -635,11 +850,11 @@ MakeNtuple::endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup cons
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
 void
 MakeNtuple::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
-  //The following says we do not know what parameters are allowed so do no validation
-  // Please change this to state exactly what you do use, even if it is no parameters
-  edm::ParameterSetDescription desc;
-  desc.setUnknown();
-  descriptions.addDefault(desc);
+   //The following says we do not know what parameters are allowed so do no validation
+   // Please change this to state exactly what you do use, even if it is no parameters
+   edm::ParameterSetDescription desc;
+   desc.setUnknown();
+   descriptions.addDefault(desc);
 }
 
 //define this as a plug-in

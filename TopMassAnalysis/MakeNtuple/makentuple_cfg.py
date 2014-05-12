@@ -16,6 +16,18 @@ options.register( 'runOnMC',
       VarParsing.varType.bool,
       'True for MC')
 
+options.register( 'fileList',
+      'filelist.txt',
+      VarParsing.multiplicity.singleton,
+      VarParsing.varType.string,
+      'File list.')
+
+options.register( 'runTtbar',
+      False,
+      VarParsing.multiplicity.singleton,
+      VarParsing.varType.bool,
+      'True for Ttbar MC')
+
 options.register( 'globalTag',
       'START53_V7A',
       VarParsing.multiplicity.singleton,
@@ -28,6 +40,9 @@ options.register( 'wantSummary',
       VarParsing.varType.bool,
       "Print summary at end of job")
 
+options.setDefault( 'inputFiles',
+      'root://cmseos:1094//eos/uscms/store/user/nmirman/CRABjobs/Skim20140322/TTJets/nmirman/TTJets_MassiveBinDECAY_TuneZ2star_8TeV-madgraph-tauola/TopMass_TTJets_20140322/6bc4e5e44b306d7fc6bf3112f474f486/topmassSkim_1_1_QfX.root' )
+
 options.parseArguments()
 
 process = cms.Process("Demo")
@@ -35,10 +50,9 @@ process = cms.Process("Demo")
 process.load("FWCore.MessageService.MessageLogger_cfi")
 process.MessageLogger.cerr.FwkReport.reportEvery = 1000
 
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) ) #-1
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 
-# list w/ input files
-fileList = FileUtils.loadListFromFile( 'filelist.txt' )
+fileList = FileUtils.loadListFromFile( options.fileList )
 
 process.source = cms.Source("PoolSource",
     # replace 'myfile.root' with the source file you want to use
@@ -56,6 +70,8 @@ process.GlobalTag.globaltag = ( options.globalTag+'::All' )
 process.load("TopMassAnalysis.MakeNtuple.makentuple_cfi")
 process.makentuple.outFileName = options.outputFile
 process.makentuple.runOnMC = options.runOnMC
+process.makentuple.runTtbar = cms.bool( options.runTtbar )
 process.makentuple.negTagCut = 0.244
+#process.makentuple.jetScale = cms.double(0.85)
 
 process.p = cms.Path(process.makentuple)
