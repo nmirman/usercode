@@ -708,10 +708,10 @@ METSigNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    const JetCorrector* corrector2 = JetCorrector::getJetCorrector (pfjetCorrectorL123_, iSetup);
 
    // jet energy correction uncertainty
-   string path = std::getenv("CMSSW_BASE");
+   string path2 = std::getenv("CMSSW_BASE");
    //JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty("src/PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt");
    //JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty("../../PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt");
-   JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( (path+"/src/PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt").c_str() );
+   JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( (path2+"/src/PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt").c_str() );
 
    icand = 0;
    for(reco::PFJetCollection::const_iterator jet = inputUncorJets->begin(); jet != inputUncorJets->end() && icand<saveJets_; ++jet) {

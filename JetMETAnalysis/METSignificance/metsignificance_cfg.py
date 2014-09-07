@@ -47,9 +47,7 @@ process.ak5PFJets.doAreaFastjet = cms.bool(True)
 process.mypf2pat = cms.Sequence(
       process.pfNoPileUpSequence * # pfPileUp enable is false
       process.pfParticleSelectionSequence *
-      process.pfAllMuons * 
-      process.pfMuonsFromVertex *
-      process.pfSelectedMuons *
+      process.pfMuonSequence *
       process.pfNoMuon *
       process.pfElectronSequence *
       process.pfNoElectron *

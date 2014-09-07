@@ -370,20 +370,155 @@ process.step3 = cms.EDFilter("CandViewCountFilter",
 )
 
 
-# type-1 corrected MET -- run w/ process.producePFMETCorrections
+## type-1 corrected MET -- run w/ process.producePFMETCorrections
+#process.load("JetMETCorrections.Type1MET.pfMETCorrections_cff")
+#if not runOnMC:
+#         process.pfJetMETcorr.jetCorrLabel = cms.string("ak5PFL1FastL2L3Residual")
+
+#process.pfType1CorrectedMetPFlow = process.pfType1CorrectedMet.clone(
+#      src = cms.InputTag("pfMET"+postfix)
+#      )
+
+# load MET corrections
+
+#process.load("JetMETCorrections.Type1MET.correctionTermsCaloMet_cff")
+#process.load("JetMETCorrections.Type1MET.correctionTermsPfMetType1Type2_cff")
+#process.load("JetMETCorrections.Type1MET.correctionTermsPfMetType0PFCandidate_cff")
+#process.load("JetMETCorrections.Type1MET.correctionTermsPfMetType0RecoTrack_cff")
+#process.load("JetMETCorrections.Type1MET.correctionTermsPfMetShiftXY_cff")
+#process.load("JetMETCorrections.Type1MET.correctedMet_cff")
+#
+#if( runOnMC ):
+#   process.corrPfMetType1.jetCorrLabel = cms.string("ak5PFL1FastL2L3")
+#   process.corrPfMetShiftXY.parameter = process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_mc
+#else:
+#   process.corrPfMetType1.jetCorrLabel = cms.string("ak5PFL1FastL2L3Residual")
+#   process.corrPfMetShiftXY.parameter = process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_data
+#
+#process.metcorr = cms.Path(
+#      process.correctionTermsPfMetType1Type2 +
+#      process.correctionTermsPfMetType0RecoTrack +
+#      process.correctionTermsPfMetType0PFCandidate +
+#      process.correctionTermsPfMetShiftXY +
+#      process.correctionTermsCaloMet +
+#      process.caloMetT1 + 
+#      process.caloMetT1T2 + 
+#      process.pfMetT0rt +
+#      process.pfMetT0rtT1 +
+#      process.pfMetT0pc +
+#      process.pfMetT0pcT1 +
+#      process.pfMetT0rtTxy +
+#      process.pfMetT0rtT1Txy +
+#      process.pfMetT0pcTxy +
+#      process.pfMetT0pcT1Txy +
+#      process.pfMetT1 +
+#      process.pfMetT1Txy
+#)
+
+
+#
+## MET Configuration
+#
+
+# type-I corrections
 process.load("JetMETCorrections.Type1MET.pfMETCorrections_cff")
 if not runOnMC:
-         process.pfJetMETcorr.jetCorrLabel = cms.string("ak5PFL1FastL2L3Residual")
+      process.pfJetMETcorr.jetCorrLabel = cms.string("ak5PFL1FastL2L3Residual")
 
-process.pfType1CorrectedMetPFlow = process.pfType1CorrectedMet.clone(
-      src = cms.InputTag("pfMET"+postfix)
+# type-0 corrections
+process.load("JetMETCorrections.Type1MET.pfMETCorrectionType0_cfi")
+
+process.pfType1CorrectedMetType0 = process.pfType1CorrectedMet.clone(
+      applyType0Corrections = cms.bool(False),
+      srcType1Corrections = cms.VInputTag(
+         cms.InputTag('pfMETcorrType0'),
+         cms.InputTag('pfJetMETcorr', 'type1')        
+         )
       )
+process.producePFMETCorrectionsType0 = cms.Sequence( process.producePFMETCorrections )
+process.producePFMETCorrectionsType0.replace(
+      process.pfType1CorrectedMet,
+      process.pfType1CorrectedMetType0
+      )
+
+# x/y shift corrections
+process.load("JetMETCorrections.Type1MET.pfMETsysShiftCorrections_cfi")
+#process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_data = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.clone(
+#      numJetsMin = cms.int32(-1),
+#      numJetsMax = cms.int32(-1),
+#      px = cms.string("+4.83642e-02 + 2.48870e-01*Nvtx"),
+#      py = cms.string("-1.50135e-01 - 8.27917e-02*Nvtx")
+#      )
+#process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_mc = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_mc.clone(
+#      numJetsMin = cms.int32(-1),
+#      numJetsMax = cms.int32(-1),
+#      px = cms.string("+1.62861e-01 - 2.38517e-02*Nvtx"),
+#      py = cms.string("+3.60860e-01 - 1.30335e-01*Nvtx")
+#      )
+
+# most recent numbers for correction JEC '13
+process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.px = cms.string("+4.83642e-02 + 2.48870e-01*Nvtx")
+process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.py = cms.string("-1.50135e-01 - 8.27917e-02*Nvtx")
+process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.px = cms.string("+1.62861e-01 - 2.38517e-02*Nvtx")
+process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.py = cms.string("+3.60860e-01 - 1.30335e-01*Nvtx")
+
+if not runOnMC:
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data
+if runOnMC:
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_mc
+
+process.pfType1CorrectedMetXYshift = process.pfType1CorrectedMet.clone(
+      srcType1Corrections = cms.VInputTag(
+         cms.InputTag('pfJetMETcorr', 'type1'),
+         cms.InputTag('pfMEtSysShiftCorr')
+         )
+      )
+process.producePFMETCorrectionsXYshift = cms.Sequence( process.producePFMETCorrections )
+process.producePFMETCorrectionsXYshift.replace(
+      process.pfType1CorrectedMet,
+      process.pfType1CorrectedMetXYshift
+      )
+
+# type-0 and x/y shift corrections
+process.pfType1CorrectedMetType0XYshift = process.pfType1CorrectedMet.clone(
+      applyType0Corrections = cms.bool(False),
+      srcType1Corrections = cms.VInputTag(
+         cms.InputTag('pfMETcorrType0'),
+         cms.InputTag('pfJetMETcorr', 'type1'),
+         cms.InputTag('pfMEtSysShiftCorr')
+         )
+      )
+process.producePFMETCorrectionsType0XYshift = cms.Sequence( process.producePFMETCorrections )
+process.producePFMETCorrectionsType0XYshift.replace(
+      process.pfType1CorrectedMet,
+      process.pfType1CorrectedMetType0XYshift
+      )
+
+process.pfMET.jets = cms.InputTag('pfJetsPFlow')
+
+process.mymet = cms.Sequence(
+      process.pfMET *
+      process.producePFMETCorrections *
+      process.type0PFMEtCorrection *
+      process.producePFMETCorrectionsType0 *
+      process.pfMEtSysShiftCorrSequence *
+      process.producePFMETCorrectionsXYshift *
+      process.producePFMETCorrectionsType0XYshift
+      )
+
+metList = []
+metList.append(cms.untracked.InputTag("pfMet", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMet", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMetType0", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMetXYshift", "", ""))
+metList.append(cms.untracked.InputTag("pfType1CorrectedMetType0XYshift", "", ""))
 
 # MET cut
 process.highMET = cms.EDFilter("CandViewSelector",
     #src = cms.InputTag("patMETs"+postfix),
     #src = cms.InputTag("pfType1CorrectedMetPFLow"),
-    src = cms.InputTag("pfType1CorrectedMet"),
+    #src = cms.InputTag("pfType1CorrectedMet"),
+    src = cms.InputTag("pfType1CorrectedMetType0XYshift"),
     cut = cms.string("pt>40")
 )
 
@@ -391,6 +526,18 @@ process.highMETFilter = cms.EDFilter("CandViewCountFilter",
     src = cms.InputTag("highMET"),
     minNumber = cms.uint32(1)
 )
+
+# add corrected MET to PAT
+from PhysicsTools.PatAlgos.producersLayer1.metProducer_cfi import patMETs
+process.patPfType1CorrectedMetType0XYshift = process.patMETsPFlow.clone(
+      metSource = cms.InputTag('pfType1CorrectedMetType0XYshift'),
+      addMuonCorrections = cms.bool(False),
+      addGenMET    = cms.bool(False)
+)
+
+process.out.outputCommands += [ 'keep *_pfMet_*_*',
+      'keep *_pfType1*_*_*'
+      ]
 
 process.step4 = cms.Sequence(process.highMET*process.highMETFilter)
 process.step4emu = cms.Sequence()
@@ -442,9 +589,12 @@ process.p_ee += process.step3
 process.p_emu += process.step3
 process.p_mumu += process.step3
 
-process.p_ee += process.producePFMETCorrections
-process.p_emu += process.producePFMETCorrections
-process.p_mumu += process.producePFMETCorrections
+#process.p_ee += process.producePFMETCorrections
+#process.p_emu += process.producePFMETCorrections
+#process.p_mumu += process.producePFMETCorrections
+process.p_ee += process.mymet
+process.p_emu += process.mymet
+process.p_mumu += process.mymet
 
 process.p_ee += process.step4
 process.p_mumu += process.step4
@@ -462,5 +612,5 @@ if options.keepAllEvts:
    print 'KEEPING ALL EVENTS'
    process.out.SelectEvents.SelectEvents = []
 
-# process.out.outputCommands.append( 'keep *' )
+#process.out.outputCommands.append( 'keep *' )
 

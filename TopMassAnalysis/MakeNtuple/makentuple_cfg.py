@@ -34,6 +34,12 @@ options.register( 'globalTag',
       VarParsing.varType.string,
       'CMS Global Tag')
 
+options.register( 'randSeed',
+      '0',
+      VarParsing.multiplicity.singleton,
+      VarParsing.varType.int,
+      'Random Seed for MC smearing')
+
 options.register( 'wantSummary',
       False,
       VarParsing.multiplicity.singleton,
@@ -72,6 +78,6 @@ process.makentuple.outFileName = options.outputFile
 process.makentuple.runOnMC = options.runOnMC
 process.makentuple.runTtbar = cms.bool( options.runTtbar )
 process.makentuple.negTagCut = 0.244
-#process.makentuple.jetScale = cms.double(0.85)
+process.makentuple.randSeed = options.randSeed
 
 process.p = cms.Path(process.makentuple)

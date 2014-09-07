@@ -1,37 +1,40 @@
 #! /bin/bash
 
 xrd='root://cmseos:1094/'
-skimdir='/eos/uscms/store/user/nmirman/CRABjobs/Skim20140322'
-outdir='/eos/uscms/store/user/nmirman/Ntuples/TopMass/20140507'
+skimdir='/eos/uscms/store/user/nmirman/CRABjobs/Skim20140711'
+outdir='/eos/uscms/store/user/nmirman/Ntuples/TopMass/20140730'
 
-if [[ $1 == 1 ]]
-then
-   cd /uscms/home/nmirman/nobackup/CMSSW_5_3_9_patch3/src/
-   eval `scramv1 runtime -sh`
-   cd TopMassAnalysis/MakeNtuple/
-   export WORKING_DIR=$_CONDOR_SCRATCH_DIR
-fi
+#if [[ $1 == -1 ]]
+#then
+#   cd /uscms/home/nmirman/nobackup/CMSSW_5_3_9_patch3/src/
+#   eval `scramv1 runtime -sh`
+#   cd TopMassAnalysis/MakeNtuple/
+#   export WORKING_DIR=$_CONDOR_SCRATCH_DIR
+#fi
+#export WORKING_DIR=$_CONDOR_SCRATCH_DIR
+export WORKING_DIR=.
 
-count=-1
+count=0
 for sample in `ls $skimdir`
 do
 
    count=$[count+1]
 
-   if [[ $2 != $count && $1 == 1 ]]
-   then
-      continue
-   fi
+   #if [[ $1 != $count && $1 == 1 ]]
+   #if [[ $1 != $count ]]
+   #then
+   #   continue
+   #fi
 
    echo 'Processing '$sample'...'
    filename=filelist_$sample.txt
-   if [ -a ${WORKING_DIR}$filename ] ; then
-      rm ${WORKING_DIR}$filename
+   if [ -a ${WORKING_DIR}/$filename ] ; then
+      rm ${WORKING_DIR}/$filename
    fi
    
    for file in `tree $skimdir/$sample -i -f | grep .root`
    do
-      echo $xrd$file >> ${WORKING_DIR}$filename
+      echo $xrd$file >> ${WORKING_DIR}/$filename
    done
 
    # run options
@@ -52,9 +55,9 @@ do
       fi
    fi
 
-   cmsRun makentuple_cfg.py runOnMC=$optMC runTtbar=$optTtbar globalTag=$optGT fileList=${WORKING_DIR}$filename outputFile=${WORKING_DIR}ntuple.root
-   mv ${WORKING_DIR}ntuple.root $outdir/ntuple_$sample.root
-   rm ${WORKING_DIR}$filename
+   cmsRun makentuple_cfg.py runOnMC=$optMC runTtbar=$optTtbar globalTag=$optGT fileList=${WORKING_DIR}/$filename outputFile=${WORKING_DIR}/ntuple.root randSeed=$count
+   mv ${WORKING_DIR}/ntuple.root $outdir/ntuple_$sample.root
+   rm ${WORKING_DIR}/$filename
 
 done
 

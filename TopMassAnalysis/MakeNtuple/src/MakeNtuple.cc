@@ -57,6 +57,7 @@
 #include "TMatrix.h"
 #include "TTree.h"
 #include "TFile.h"
+#include "TRandom3.h"
 
 #include <string>
 
@@ -129,11 +130,13 @@ class MakeNtuple : public edm::EDAnalyzer {
       JetSorter js;
 		  event_id this_event_id;
 		  std::set<event_id, compare_event_id> event_ids;
+        int randSeed_;
 
       edm::InputTag               muonTag_;
       edm::InputTag               electronTag_;
       edm::InputTag               jetTag_;
       edm::InputTag               metTag_;
+      edm::InputTag               pmetTag_;
       edm::InputTag               genParticleTag_;
 
       std::vector<pat::Jet> taggedJets_;
@@ -217,7 +220,9 @@ muonTag_         (iConfig.getParameter<edm::InputTag>("muonSrc") ),
 electronTag_     (iConfig.getParameter<edm::InputTag>("electronSrc") ),
 jetTag_          (iConfig.getParameter<edm::InputTag>("jetSrc") ),
 metTag_          (iConfig.getParameter<edm::InputTag>("metSrc") ),
-genParticleTag_         (iConfig.getParameter<edm::InputTag>("genParticleSrc") )
+pmetTag_          (iConfig.getParameter<edm::InputTag>("pmetSrc") ),
+genParticleTag_         (iConfig.getParameter<edm::InputTag>("genParticleSrc") ),
+randSeed_        (iConfig.getParameter<int>("randSeed"))
 
 
 
@@ -637,10 +642,14 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   const reco::RecoCandidate* lep2 = goodLeptons_[1];
   
   // get met
-  edm::Handle<edm::View<pat::MET> > mets;
-  //edm::Handle<edm::View<reco::MET> > mets;
+  edm::Handle<edm::View<reco::PFMET> > mets;
   iEvent.getByLabel(metTag_, mets);
-  pat::MET met = mets->front();
+  reco::PFMET met = mets->front();
+
+  // get pat met for genmet object
+  edm::Handle<edm::View<pat::MET> > pmets;
+  iEvent.getByLabel(pmetTag_, pmets);
+  pat::MET pmet = pmets->front();
   
    // Now set the variables we haven't set yet.
   jet1FourVector.SetPxPyPzE(jet1.px(), jet1.py(), jet1.pz(), jet1.energy());
@@ -687,12 +696,6 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     }
     delete jecUnc;
 
-    //std::cout << "JES SCALE TEST: " << std::endl;
-    //std::cout << "jet1 pt, unc: " << jet1FourVector.Pt() << " " << jet1jesuncertainty << std::endl;
-    //std::cout << "jet2 pt, unc: " << jet2FourVector.Pt() << " " << jet2jesuncertainty << std::endl;
-    //std::cout << "met: " << metFourVector.Pt() << std::endl;
-    //fflush(stdout);
-
   numBJets = taggedJets_.size();
 
   lepton1FourVector.SetPxPyPzE(lep1->px(), lep1->py(), lep1->pz(), lep1->energy());
@@ -702,9 +705,55 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   PDG2 = lep2->pdgId();
 
 	if (runTtbar_) {
-	  generatedMetFourVector.SetPxPyPzE(met.genMET()->px(), met.genMET()->py(), met.genMET()->pz(), met.genMET()->energy());
+	  generatedMetFourVector.SetPxPyPzE(pmet.genMET()->px(), pmet.genMET()->py(), pmet.genMET()->pz(), pmet.genMET()->energy());
 	}
   metSignificanceMatrix = met.getSignificanceMatrix();
+
+  // jet-met smearing
+  // TODO
+  if( runOnMC_ ){
+     TRandom3* rand = new TRandom3(randSeed_+10E6);
+     double met_dx = 0;
+     double met_dy = 0;
+     bool jet1smear = false;
+     bool jet2smear = false;
+
+     for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+        double ptres = ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
+
+        double c = 1.0;
+        if( fabs(jet->eta()) < 0.5 ) c = 1.052;
+        else if( fabs(jet->eta()) < 1.1 ) c = 1.057;
+        else if( fabs(jet->eta()) < 1.7 ) c = 1.096;
+        else if( fabs(jet->eta()) < 2.3 ) c = 1.134;
+        else if( fabs(jet->eta()) < 5.0 ) c = 1.288;
+
+        double s = 0.0;
+        if( jet->pt() > 10 ){ //smear
+           s = rand->Gaus(0.0,ptres*sqrt(c*c-1));
+           met_dx -= s/sqrt(2);
+           met_dy -= s/sqrt(2);
+           if( jet->pt() == jet1FourVector.Pt() ){
+              jet1FourVector.SetPx( jet1FourVector.Px()+(s/sqrt(2)) );
+              jet1FourVector.SetPy( jet1FourVector.Py()+(s/sqrt(2)) );
+              jet1smear = true;
+           }
+           if( jet->pt() == jet2FourVector.Pt() ){
+              jet2FourVector.SetPx( jet2FourVector.Px()+(s/sqrt(2)) );
+              jet2FourVector.SetPy( jet2FourVector.Py()+(s/sqrt(2)) );
+              jet2smear = true;
+           }
+        }
+     }
+
+     metFourVector.SetPx( metFourVector.Px()+met_dx );
+     metFourVector.SetPy( metFourVector.Py()+met_dy );
+
+     //if( !jet1smear ) std::cout << "jet1 not smeared" << std::endl;
+     //if( !jet2smear ) std::cout << "jet2 not smeared" << std::endl;
+     //fflush(stdout);
+
+  }
 
   tree->Fill();
 }
