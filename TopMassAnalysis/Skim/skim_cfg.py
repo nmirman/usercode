@@ -129,25 +129,7 @@ process.out.SelectEvents.SelectEvents = []
 
 # met filters
 # https://twiki.cern.ch/twiki/bin/viewauth/CMS/MissingETOptionalFilters
-process.load('CommonTools.RecoAlgos.HBHENoiseFilter_cfi')
-process.load('RecoMET.METAnalyzers.CSCHaloFilter_cfi')
-process.load('RecoMET.METFilters.hcalLaserEventFilter_cfi')
-process.load('RecoMET.METFilters.EcalDeadCellTriggerPrimitiveFilter_cfi')
-process.load('RecoMET.METFilters.eeBadScFilter_cfi')
-process.load('RecoMET.METFilters.ecalLaserCorrFilter_cfi')
-process.load('RecoMET.METFilters.trackingFailureFilter_cfi')
-process.trackingFailureFilter.VertexSource = cms.InputTag('goodOfflinePrimaryVertices')
-process.load('RecoMET.METFilters.trackingPOGFilters_cff')
-process.metFilters = cms.Sequence(
-      process.HBHENoiseFilter *
-      process.CSCTightHaloFilter *
-      process.hcalLaserEventFilter *
-      process.EcalDeadCellTriggerPrimitiveFilter *
-      process.trackingFailureFilter *
-      process.eeBadScFilter *
-      process.ecalLaserCorrFilter *
-      process.trkPOGFilters
-)
+process.load('RecoMET.METFilters.metFilters_cff')
 
 # scraping filter for data only
 process.scrapingFilter = cms.EDFilter(
@@ -236,13 +218,13 @@ applyPostfix( process, 'selectedPatMuons', postfix ).cut = '''abs(eta)<2.4 && pt
 applyPostfix( process, 'pfElectronsFromVertex', postfix ).vertices = (
       cms.InputTag( 'goodOfflinePrimaryVertices' ) )
 applyPostfix( process, 'pfElectronsFromVertex', postfix ).d0Cut    = 0.04
-process.load('EGamma.EGammaAnalysisTools.electronIdMVAProducer_cfi')
-process.load('EGamma.EGammaAnalysisTools.electronIsolatorFromEffectiveArea_cfi')
+process.load('EgammaAnalysis.ElectronTools.electronIdMVAProducer_cfi')
 process.pfIdentifiedElectrons = cms.EDFilter("ElectronIDPFCandidateSelector", 
       recoGsfElectrons = cms.InputTag("gsfElectrons"),
       electronIdMap = cms.InputTag("mvaTrigV0"),
       electronIdCut = cms.double(0.0),
       src = cms.InputTag('pfElectronsFromVertex'+postfix))
+process.load('EgammaAnalysis.ElectronTools.electronIsolatorFromEffectiveArea_cfi')
 process.elPFIsoValueEA03.pfElectrons = cms.InputTag( 'pfSelectedElectrons'+postfix, '', '')
 
 applyPostfix( process, 'pfSelectedElectrons', postfix ).src = 'pfIdentifiedElectrons'
@@ -457,15 +439,15 @@ process.load("JetMETCorrections.Type1MET.pfMETsysShiftCorrections_cfi")
 #      )
 
 # most recent numbers for correction JEC '13
-process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.px = cms.string("+4.83642e-02 + 2.48870e-01*Nvtx")
-process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.py = cms.string("-1.50135e-01 - 8.27917e-02*Nvtx")
-process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.px = cms.string("+1.62861e-01 - 2.38517e-02*Nvtx")
-process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.py = cms.string("+3.60860e-01 - 1.30335e-01*Nvtx")
+#process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.px = cms.string("+4.83642e-02 + 2.48870e-01*Nvtx")
+#process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.py = cms.string("-1.50135e-01 - 8.27917e-02*Nvtx")
+#process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.px = cms.string("+1.62861e-01 - 2.38517e-02*Nvtx")
+#process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data.py = cms.string("+3.60860e-01 - 1.30335e-01*Nvtx")
 
 if not runOnMC:
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_data
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_data
 if runOnMC:
-   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCvsNvtx_mc
+   process.pfMEtSysShiftCorr.parameter = process.pfMEtSysShiftCorrParameters_2012runABCDvsNvtx_mc
 
 process.pfType1CorrectedMetXYshift = process.pfType1CorrectedMet.clone(
       srcType1Corrections = cms.VInputTag(
@@ -536,7 +518,8 @@ process.patPfType1CorrectedMetType0XYshift = process.patMETsPFlow.clone(
 )
 
 process.out.outputCommands += [ 'keep *_pfMet_*_*',
-      'keep *_pfType1*_*_*'
+      'keep *_pfType1*_*_*',
+      'keep *_ak5PFJets_*_*'
       ]
 
 process.step4 = cms.Sequence(process.highMET*process.highMETFilter)

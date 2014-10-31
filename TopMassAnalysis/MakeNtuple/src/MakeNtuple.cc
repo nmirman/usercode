@@ -130,7 +130,8 @@ class MakeNtuple : public edm::EDAnalyzer {
       JetSorter js;
 		  event_id this_event_id;
 		  std::set<event_id, compare_event_id> event_ids;
-        int randSeed_;
+
+      TMatrixD metSignificanceMatrix;
 
       edm::InputTag               muonTag_;
       edm::InputTag               electronTag_;
@@ -138,6 +139,8 @@ class MakeNtuple : public edm::EDAnalyzer {
       edm::InputTag               metTag_;
       edm::InputTag               pmetTag_;
       edm::InputTag               genParticleTag_;
+
+      int randSeed_;
 
       std::vector<pat::Jet> taggedJets_;
       std::vector<pat::Jet> negTaggedJets_;
@@ -165,7 +168,6 @@ class MakeNtuple : public edm::EDAnalyzer {
       double jet2PtResolution, jet2PhiResolution, jet2EtaResolution;
       double uncorrectedJet1PtResolution, uncorrectedJet1PhiResolution, uncorrectedJet1EtaResolution;
       double uncorrectedJet2PtResolution, uncorrectedJet2PhiResolution, uncorrectedJet2EtaResolution;
-      TMatrixD metSignificanceMatrix;
       double PDG1, PDG2;
       int jet1GenId, jet2GenId;
       int jet1ParentIdGEN, jet2ParentIdGEN;
@@ -710,16 +712,13 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   metSignificanceMatrix = met.getSignificanceMatrix();
 
   // jet-met smearing
-  // TODO
   if( runOnMC_ ){
      TRandom3* rand = new TRandom3(randSeed_+10E6);
      double met_dx = 0;
      double met_dy = 0;
-     bool jet1smear = false;
-     bool jet2smear = false;
 
      for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
-        double ptres = ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
+        double ptres = jet->pt()*ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
 
         double c = 1.0;
         if( fabs(jet->eta()) < 0.5 ) c = 1.052;
@@ -736,22 +735,15 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
            if( jet->pt() == jet1FourVector.Pt() ){
               jet1FourVector.SetPx( jet1FourVector.Px()+(s/sqrt(2)) );
               jet1FourVector.SetPy( jet1FourVector.Py()+(s/sqrt(2)) );
-              jet1smear = true;
            }
            if( jet->pt() == jet2FourVector.Pt() ){
               jet2FourVector.SetPx( jet2FourVector.Px()+(s/sqrt(2)) );
               jet2FourVector.SetPy( jet2FourVector.Py()+(s/sqrt(2)) );
-              jet2smear = true;
            }
         }
      }
-
      metFourVector.SetPx( metFourVector.Px()+met_dx );
      metFourVector.SetPy( metFourVector.Py()+met_dy );
-
-     //if( !jet1smear ) std::cout << "jet1 not smeared" << std::endl;
-     //if( !jet2smear ) std::cout << "jet2 not smeared" << std::endl;
-     //fflush(stdout);
 
   }
 
