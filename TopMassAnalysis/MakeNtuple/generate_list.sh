@@ -6,5 +6,5 @@ rm filelist.txt
 
 for file in `ls ${dir}`
 do
-   echo 'file:'${dir}${file} >> filelist.txt
+      echo 'file:'${dir}${file} >> filelist.txt
 done

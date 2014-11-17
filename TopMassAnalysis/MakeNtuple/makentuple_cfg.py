@@ -35,10 +35,16 @@ options.register( 'globalTag',
       'CMS Global Tag')
 
 options.register( 'randSeed',
-      '0',
+      0,
       VarParsing.multiplicity.singleton,
       VarParsing.varType.int,
       'Random Seed for MC smearing')
+
+options.register( 'skipEvents',
+      0,
+      VarParsing.multiplicity.singleton,
+      VarParsing.varType.int,
+      'Skip first n events.')
 
 options.register( 'wantSummary',
       False,
@@ -54,21 +60,15 @@ options.parseArguments()
 process = cms.Process("Demo")
 
 process.load("FWCore.MessageService.MessageLogger_cfi")
-process.MessageLogger.cerr.FwkReport.reportEvery = 1000
+process.MessageLogger.cerr.FwkReport.reportEvery = 100
 
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(options.maxEvents) )
 
 fileList = FileUtils.loadListFromFile( options.fileList )
 
 process.source = cms.Source("PoolSource",
-    # replace 'myfile.root' with the source file you want to use
-    #fileNames = cms.untracked.vstring(
-       #'file:BsmMassesSkim_Summer11_Sync_15_1_ZHz.root'
-       #'/store/user/nmirman/DoubleElectron/TopMass_DoubleElectron_Run2012A-22Jan2013/e31ff7515f7d356ae1a23ccf4a2e42cf/BsmMassesSkim_Summer11_Sync_217_1_LOI.root',
-       #'/store/user/nmirman/DoubleElectron/TopMass_DoubleElectron_Run2012A-22Jan2013/e31ff7515f7d356ae1a23ccf4a2e42cf/BsmMassesSkim_Summer11_Sync_101_1_XTb.root',
-       #'/store/user/nmirman/DoubleElectron/TopMass_DoubleElectron_Run2012A-22Jan2013/e31ff7515f7d356ae1a23ccf4a2e42cf/BsmMassesSkim_Summer11_Sync_103_1_ICO.root'
-    #)
-    fileNames = cms.untracked.vstring( *fileList )
+    fileNames = cms.untracked.vstring( *fileList ),
+    skipEvents = cms.untracked.uint32( options.skipEvents )
 )
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 process.GlobalTag.globaltag = ( options.globalTag+'::All' )

@@ -5,10 +5,10 @@
 // 
 /**\class MakeNtuple MakeNtuple.cc BsmMasses/MakeNtuple/src/MakeNtuple.cc
 
- Description: [one line class summary]
+Description: [one line class summary]
 
- Implementation:
-     [Notes on implementation]
+Implementation:
+[Notes on implementation]
 */
 //
 // Original Author:  Nicholas Eggert
@@ -66,38 +66,38 @@
 //
 
 class JetSorter {
-public:
-    JetSorter(std::string bTagName) {bTagName_ = bTagName; }
-    bool operator() (pat::Jet jet1, pat::Jet jet2) {
-        // return true if jet1 should come before jet2
+   public:
+      JetSorter(std::string bTagName) {bTagName_ = bTagName; }
+      bool operator() (pat::Jet jet1, pat::Jet jet2) {
+         // return true if jet1 should come before jet2
 
-        // if either of the jets has a b-tag, the one with the larger tag goes first
-        // this means that if one has no tag (negative discriminator), the tagged one goes first
-        if ((jet1.bDiscriminator(bTagName_) > 0.) || jet2.bDiscriminator(bTagName_) > 0.) {
+         // if either of the jets has a b-tag, the one with the larger tag goes first
+         // this means that if one has no tag (negative discriminator), the tagged one goes first
+         if ((jet1.bDiscriminator(bTagName_) > 0.) || jet2.bDiscriminator(bTagName_) > 0.) {
             return (jet1.bDiscriminator(bTagName_) > jet2.bDiscriminator(bTagName_));
-        }
-        else { // if neither jet is tagged, the one with the higher pt goes first
+         }
+         else { // if neither jet is tagged, the one with the higher pt goes first
             return (jet1.pt() > jet2.pt());
-        }
-    }
-private:
-    std::string bTagName_;
+         }
+      }
+   private:
+      std::string bTagName_;
 };
 
 struct event_id {
-	// struct to hold event identifiers so we can check for uniqueness
-	int run;
-	int lumi;
-	int event;
+   // struct to hold event identifiers so we can check for uniqueness
+   int run;
+   int lumi;
+   int event;
 };
 
 struct compare_event_id {
-	bool operator() (event_id id1, event_id id2) {
-		// sorting class for event_id. Needed to use the set object with these
-		if (id1.run != id2.run) return (id1.run > id2.run);
-		else if (id1.lumi != id2.lumi) return (id1.lumi > id2.lumi);
-		else return (id1.event > id2.event);
-	}
+   bool operator() (event_id id1, event_id id2) {
+      // sorting class for event_id. Needed to use the set object with these
+      if (id1.run != id2.run) return (id1.run > id2.run);
+      else if (id1.lumi != id2.lumi) return (id1.lumi > id2.lumi);
+      else return (id1.event > id2.event);
+   }
 };
 
 
@@ -121,17 +121,18 @@ class MakeNtuple : public edm::EDAnalyzer {
       virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
       virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
 
+      void calculateSystematics( const edm::Event&, const TLorentzVector met, const TLorentzVector jet1, const TLorentzVector jet2,
+            const TLorentzVector lep1, const TLorentzVector lep2);
+
       // ----------member data ---------------------------
       double jetScale_, leptonScale_, jetResScale_;
       std::string bTagger_;
       double bTagCut_, negTagCut_;
-		  bool doMETCut_, runOnMC_, runTtbar_;
+      bool doMETCut_, runOnMC_, runTtbar_;
       std::string outFileName_;
       JetSorter js;
-		  event_id this_event_id;
-		  std::set<event_id, compare_event_id> event_ids;
-
-      TMatrixD metSignificanceMatrix;
+      event_id this_event_id;
+      std::set<event_id, compare_event_id> event_ids;
 
       edm::InputTag               muonTag_;
       edm::InputTag               electronTag_;
@@ -147,7 +148,8 @@ class MakeNtuple : public edm::EDAnalyzer {
       std::vector<const reco::RecoCandidate*> goodLeptons_;
 
       // This will be a pointer to the tree we want to use for this event
-      TTree *tree, *treeData, *treeBkg, *treeBkg2;
+      std::map<std::string, TTree*> trees;
+      TTree *tree;
       TFile *file;
 
       JetResolution *ptResol_;
@@ -156,7 +158,7 @@ class MakeNtuple : public edm::EDAnalyzer {
 
       const reco::Candidate *t, *tb, *b, *bb, *Wp, *Wm, *lp, *lm, *n, *nb;
 
-      TLorentzVector jet1FourVector, jet2FourVector, lepton1FourVector, lepton2FourVector;
+      TLorentzVector jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector;
       TLorentzVector uncorrectedJet1FourVector, uncorrectedJet2FourVector;
       TLorentzVector generatedJet1FourVector, generatedJet2FourVector, metFourVector, generatedMetFourVector;
       TLorentzVector bGEN, bbarGEN, lpGEN, lmGEN, nGEN, nbarGEN;
@@ -183,13 +185,16 @@ class MakeNtuple : public edm::EDAnalyzer {
       float MyWeight;
       float T_nvertices;
 
-     int geninfo_pid;
-     float geninfo_pthat;
-     float geninfo_weight;
-     float geninfo_xsec;
-     float geninfo_eff;
-     float geninfo_alphaQCD;
-     float geninfo_alphaQED;
+      int geninfo_pid;
+      float geninfo_pthat;
+      float geninfo_weight;
+      float geninfo_xsec;
+      float geninfo_eff;
+      float geninfo_alphaQCD;
+      float geninfo_alphaQED;
+
+      std::vector<std::string> systnames;
+      std::map<std::string, TLorentzVector> metsyst, jet1syst, jet2syst, lep1syst, lep2syst;
 
 };
 
@@ -205,46 +210,45 @@ class MakeNtuple : public edm::EDAnalyzer {
 // constructors and destructor
 //
 MakeNtuple::MakeNtuple(const edm::ParameterSet& iConfig) :
-jetScale_ (iConfig.getParameter<double>("jetScale")),
-leptonScale_ (iConfig.getParameter<double>("leptonScale")),
-jetResScale_ (iConfig.getParameter<double>("jetResScale")),
-bTagger_ (iConfig.getParameter<std::string>("bTagger")),
-bTagCut_ (iConfig.getParameter<double>("bTagCut")),
-negTagCut_ (iConfig.getParameter<double>("negTagCut")),
-doMETCut_ (iConfig.getParameter<bool>("doMETCut")),
-runOnMC_ (iConfig.getParameter<bool>("runOnMC")),
-runTtbar_ (iConfig.getParameter<bool>("runTtbar")),
-outFileName_ (iConfig.getParameter<std::string>("outFileName")),
-js (JetSorter(bTagger_)),
-metSignificanceMatrix (TMatrixD(2, 2)),
-// tree (NULL);
-muonTag_         (iConfig.getParameter<edm::InputTag>("muonSrc") ),
-electronTag_     (iConfig.getParameter<edm::InputTag>("electronSrc") ),
-jetTag_          (iConfig.getParameter<edm::InputTag>("jetSrc") ),
-metTag_          (iConfig.getParameter<edm::InputTag>("metSrc") ),
-pmetTag_          (iConfig.getParameter<edm::InputTag>("pmetSrc") ),
-genParticleTag_         (iConfig.getParameter<edm::InputTag>("genParticleSrc") ),
-randSeed_        (iConfig.getParameter<int>("randSeed"))
+   jetScale_ (iConfig.getParameter<double>("jetScale")),
+   leptonScale_ (iConfig.getParameter<double>("leptonScale")),
+   jetResScale_ (iConfig.getParameter<double>("jetResScale")),
+   bTagger_ (iConfig.getParameter<std::string>("bTagger")),
+   bTagCut_ (iConfig.getParameter<double>("bTagCut")),
+   negTagCut_ (iConfig.getParameter<double>("negTagCut")),
+   doMETCut_ (iConfig.getParameter<bool>("doMETCut")),
+   runOnMC_ (iConfig.getParameter<bool>("runOnMC")),
+   runTtbar_ (iConfig.getParameter<bool>("runTtbar")),
+   outFileName_ (iConfig.getParameter<std::string>("outFileName")),
+   js (JetSorter(bTagger_)),
+   // tree (NULL);
+   muonTag_         (iConfig.getParameter<edm::InputTag>("muonSrc") ),
+   electronTag_     (iConfig.getParameter<edm::InputTag>("electronSrc") ),
+   jetTag_          (iConfig.getParameter<edm::InputTag>("jetSrc") ),
+   metTag_          (iConfig.getParameter<edm::InputTag>("metSrc") ),
+   pmetTag_          (iConfig.getParameter<edm::InputTag>("pmetSrc") ),
+   genParticleTag_         (iConfig.getParameter<edm::InputTag>("genParticleSrc") ),
+   randSeed_        (iConfig.getParameter<int>("randSeed"))
 
 
 
 {
-  //now do what ever initialization is needed
-  std::string PATH("CondFormats/JetMETObjects/data/");
-  edm::FileInPath ptFileName(PATH+"Spring10_PtResolution_AK5PF.txt");
-  edm::FileInPath phiFileName(PATH+"Spring10_PhiResolution_AK5PF.txt");
-  edm::FileInPath etaFileName(PATH+"Spring10_EtaResolution_AK5PF.txt");
+   //now do what ever initialization is needed
+   std::string PATH("CondFormats/JetMETObjects/data/");
+   edm::FileInPath ptFileName(PATH+"Spring10_PtResolution_AK5PF.txt");
+   edm::FileInPath phiFileName(PATH+"Spring10_PhiResolution_AK5PF.txt");
+   edm::FileInPath etaFileName(PATH+"Spring10_EtaResolution_AK5PF.txt");
 
-  ptResol_  = new JetResolution(ptFileName.fullPath().c_str(),true);
-  phiResol_ = new JetResolution(phiFileName.fullPath().c_str(),true);
-  etaResol_ = new JetResolution(etaFileName.fullPath().c_str(),true);
+   ptResol_  = new JetResolution(ptFileName.fullPath().c_str(),true);
+   phiResol_ = new JetResolution(phiFileName.fullPath().c_str(),true);
+   etaResol_ = new JetResolution(etaFileName.fullPath().c_str(),true);
 
 }
 
 
 MakeNtuple::~MakeNtuple()
 {
- 
+
    // do anything here that needs to be done at desctruction time
    // (e.g. close files, deallocate resources etc.)
 
@@ -386,478 +390,584 @@ const double MakeNtuple::PU2012_MCf[60] = {
 };  
 
 // ------------ method called for each event  ------------
-void
+   void
 MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
-  this_event_id.run   = iEvent.eventAuxiliary().run();
-  this_event_id.lumi  = iEvent.eventAuxiliary().luminosityBlock();
-  this_event_id.event = iEvent.eventAuxiliary().event();
-	
-	// insert returns a pair
-	// the second element is false if the id is already in the set
-	if (!event_ids.insert(this_event_id).second) return;
-	
-  taggedJets_.clear();
-  negTaggedJets_.clear();
-  goodLeptons_.clear();
+   this_event_id.run   = iEvent.eventAuxiliary().run();
+   this_event_id.lumi  = iEvent.eventAuxiliary().luminosityBlock();
+   this_event_id.event = iEvent.eventAuxiliary().event();
 
-  // pile up reweighting
-  if( runOnMC_ ){
+   // insert returns a pair
+   // the second element is false if the id is already in the set
+   if (!event_ids.insert(this_event_id).second) return;
 
-     edm::Handle<GenEventInfoProduct> gi;
-     iEvent.getByLabel("generator", gi);
+   taggedJets_.clear();
+   negTaggedJets_.clear();
+   goodLeptons_.clear();
 
-     //edm::Handle< GenRunInfoProduct > genInfoProduct;
-     //iEvent.getRun().getByLabel("generator", genInfoProduct );
+   // pile up reweighting
+   if( runOnMC_ ){
 
-     geninfo_pid   = (int)gi->signalProcessID();
-     geninfo_pthat = gi->qScale();
-     geninfo_weight   = gi->weight();
-     //geninfo_xsec  = genInfoProduct->crossSection();
-     //geninfo_eff   = genInfoProduct->filterEfficiency();
-     geninfo_xsec = -1;
-     geninfo_eff = -1;
-     geninfo_alphaQCD = gi->alphaQCD();
-     geninfo_alphaQED = gi->alphaQED();
+      edm::Handle<GenEventInfoProduct> gi;
+      iEvent.getByLabel("generator", gi);
 
-     std::vector<PileupSummaryInfo>::const_iterator PVI;
-     edm::Handle<std::vector<PileupSummaryInfo> > PupInfo;
-     iEvent.getByLabel("addPileupInfo", PupInfo);
+      //edm::Handle< GenRunInfoProduct > genInfoProduct;
+      //iEvent.getRun().getByLabel("generator", genInfoProduct );
 
-     float Tnvtx = -1.0;
-     for(PVI = PupInfo->begin(); PVI != PupInfo->end(); ++PVI) {
+      geninfo_pid   = (int)gi->signalProcessID();
+      geninfo_pthat = gi->qScale();
+      geninfo_weight   = gi->weight();
+      //geninfo_xsec  = genInfoProduct->crossSection();
+      //geninfo_eff   = genInfoProduct->filterEfficiency();
+      geninfo_xsec = -1;
+      geninfo_eff = -1;
+      geninfo_alphaQCD = gi->alphaQCD();
+      geninfo_alphaQED = gi->alphaQED();
 
-        int BX = PVI->getBunchCrossing();
+      std::vector<PileupSummaryInfo>::const_iterator PVI;
+      edm::Handle<std::vector<PileupSummaryInfo> > PupInfo;
+      iEvent.getByLabel("addPileupInfo", PupInfo);
 
-        if(BX == 0) { 
-           Tnvtx = PVI->getTrueNumInteractions(); 
-           continue;
-        }
+      float Tnvtx = -1.0;
+      for(PVI = PupInfo->begin(); PVI != PupInfo->end(); ++PVI) {
 
-        MyWeight = LumiWeights_.weight( Tnvtx );
-        T_nvertices = Tnvtx;
-     }
+         int BX = PVI->getBunchCrossing();
 
-  }
+         if(BX == 0) { 
+            Tnvtx = PVI->getTrueNumInteractions(); 
+            continue;
+         }
 
-  // get number of vertices
-  double primary_vertex_z = 0;
-  edm::Handle<std::vector<reco::Vertex> > goodVertices;
-  iEvent.getByLabel("goodOfflinePrimaryVertices", "", goodVertices);
-  vertices = goodVertices->size();
-  reco::Vertex primary_vertex = goodVertices->at(0);
-  primary_vertex_z = primary_vertex.z();
+         MyWeight = LumiWeights_.weight( Tnvtx );
+         T_nvertices = Tnvtx;
+      }
 
-
-  // Get jets that pass the b tag cut
-  edm::Handle<edm::View<pat::Jet> > jets;
-  iEvent.getByLabel(jetTag_,jets);
-  jetcount = 0;
-  for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
-    if (jet->bDiscriminator(bTagger_) > bTagCut_) {
-      taggedJets_.push_back(*jet);
-      jetcount++;
-    }
-  }
-
-  // Get jets that pass the negative b tag cut
-  for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
-    if (jet->bDiscriminator(bTagger_) < negTagCut_) {
-      negTaggedJets_.push_back(*jet);
-      jetcount++;
-    }
-  }
-
-  // Now sort the jets by b-tag, then by pt for jets without b-tags
-  // use the JetSorter object js, declared earlier
-  std::sort(taggedJets_.begin(), taggedJets_.end(), js);
-
-  pat::Jet jet1, jet2;
-  if (taggedJets_.size() >= 2) { // signal
-    tree = treeData;
-    jet1 = taggedJets_[0];
-    jet2 = taggedJets_[1];
-  }
-  else if (negTaggedJets_.size() >= 2) { // uu background
-    tree = treeBkg2;
-    jet1 = negTaggedJets_[0];
-    jet2 = negTaggedJets_[1];
-  }
-  else if (taggedJets_.size() == 1 && negTaggedJets_.size() == 1) { // bu background
-    tree = treeBkg;
-    jet1 = taggedJets_[0];
-    jet2 = negTaggedJets_[0];
-  }
-  else return;
-
-  jet1Vz = jet1.vz()-primary_vertex_z;
-  jet2Vz = jet2.vz()-primary_vertex_z;
-  //jet1VzCovariance =jet1.vertexCovariance(2,2);
-  //jet2VzCovariance =jet2.vertexCovariance(2,2);
-  jet1bdisc = jet1.bDiscriminator(bTagger_);
-  jet2bdisc = jet2.bDiscriminator(bTagger_);
-
-  pat::Jet jet1Uncor = jet1.correctedJet(0); // 0 = Uncorrected
-  pat::Jet jet2Uncor = jet2.correctedJet(0);
-  const reco::GenJet *jet1Gen = NULL;
-  const reco::GenJet *jet2Gen = NULL;
-  jet1GenId = 0;
-  jet2GenId = 0;
-  jet1ParentIdGEN = 0;
-  jet2ParentIdGEN = 0;
-	if (runTtbar_) {
-	  if (jet1.genJet()){
-	    jet1GenId = jet1.partonFlavour();
-	    jet1Gen = jet1.genJet();
-	  }
-     if(jet1.genParton()){
-        jet1ParentIdGEN = (jet1.genParton())->mother()->pdgId();
-     }
-     if (jet2.genJet()) {
-	    jet2GenId = jet2.partonFlavour();
-	    jet2Gen = jet2.genJet();
-	  }
-     if(jet2.genParton()){
-        jet2ParentIdGEN = (jet2.genParton())->mother()->pdgId();
-     }
-
-     // get gen particles
-     edm::Handle<edm::View<reco::GenParticle> > genParticles;
-     iEvent.getByLabel(genParticleTag_,genParticles);
-     for(edm::View<reco::GenParticle>::const_iterator p = genParticles->begin(); p!=genParticles->end();++p){
-        if( fabs(p->pdgId()) == 6 and (p->daughter(0)) and (p->daughter(1)) ){
-           if (p->pdgId()==6 && (p->daughter(0)->pdgId()==24 || p->daughter(1)->pdgId() == 24)) {
-              t = &*p;
-           }
-           else if (p->pdgId()==-6 && (p->daughter(0)->pdgId()==-24 || p->daughter(1)->pdgId() == -24)){
-              tb = &*p;
-           }
-        }
-     }
-     if (t->daughter(0)->pdgId() == 5 ) {
-        b = (t->daughter(0));
-        Wp = (t->daughter(1));
-     }
-     else {
-        b = (t->daughter(1));
-        Wp = (t->daughter(0));
-     }
-     if (tb->daughter(0)->pdgId() == -5) {
-        bb = (tb->daughter(0));
-        Wm = (tb->daughter(1));
-     }
-     else {
-        bb = (tb->daughter(1));
-        Wm = (tb->daughter(0));
-     }
-   
-     if (Wp->daughter(0) and (Wp->daughter(0)->pdgId() == -13 || Wp->daughter(0)->pdgId() == -11) ) {
-        lp = (Wp->daughter(0));
-        n = (Wp->daughter(1));
-     }
-     else if (Wp->daughter(1) and (Wp->daughter(1)->pdgId() == -13 || Wp->daughter(1)->pdgId() == -11)) {
-        lp = (Wp->daughter(1));
-        n = (Wp->daughter(0));
-     }
-     else {
-        //std::cout << "Wp\n";
-        //std::cout << Wp->daughter(1)->pdgId() << std::endl;
-        //std::cout << Wp->daughter(0)->pdgId() << std::endl;
-        //return; // not a dilepton event
-        lp = (Wp->daughter(1));
-        n = (Wp->daughter(0));
-     }
-     if (Wm->daughter(0)->pdgId() == 13 || Wm->daughter(0)->pdgId() == 11) {
-        lm = (Wm->daughter(0));
-        nb = (Wm->daughter(1));
-     }
-     else if (Wm->daughter(1)->pdgId() == 13 || Wm->daughter(1)->pdgId() == 11) {
-        lm = (Wm->daughter(1));
-        nb = (Wm->daughter(0));
-     }
-     else {
-        //std::cout << "Wm\n";
-        //std::cout << Wm->daughter(1)->pdgId() << std::endl;
-        //std::cout << Wm->daughter(0)->pdgId() << std::endl;
-        //return; // not a dilepton event
-        lm = (Wm->daughter(1));
-        nb = (Wm->daughter(0));
-     }
-
-     bGEN.SetPxPyPzE(b->px(), b->py(), b->pz(), b->energy());
-     bbarGEN.SetPxPyPzE(bb->px(), bb->py(), bb->pz(), bb->energy());
-     lpGEN.SetPxPyPzE(lp->px(), lp->py(), lp->pz(), lp->energy());
-     lmGEN.SetPxPyPzE(lm->px(), lm->py(), lm->pz(), lm->energy());
-     nGEN.SetPxPyPzE(n->px(), n->py(), n->pz(), n->energy());
-     nbarGEN.SetPxPyPzE(nb->px(), nb->py(), nb->pz(), nb->energy());
-     lpPdgIdGEN = lp->pdgId();
-     lmPdgIdGEN = lm->pdgId();
-     nPdgIdGEN = n->pdgId();
-     nbPdgIdGEN = nb->pdgId();
-
-	} // if runTtbar_
-   else
-   {
-     bGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
-     bbarGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
-     lpGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
-     lmGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
-     nGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
-     nbarGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
-     lpPdgIdGEN = 0;
-     lmPdgIdGEN = 0;
-     nPdgIdGEN = 0;
-     nbPdgIdGEN = 0;
    }
 
-  // get jet resolutions
-  jet1PtResolution  = ptResol_ ->resolutionEtaPt(jet1.eta(), jet1.pt())->GetParameter(2)*jetResScale_;
-  jet1PhiResolution = phiResol_->resolutionEtaPt(jet1.eta(), jet1.pt())->GetParameter(2);
-  jet1EtaResolution = etaResol_->resolutionEtaPt(jet1.eta(), jet1.pt())->GetParameter(2);
-  jet2PtResolution  = ptResol_ ->resolutionEtaPt(jet2.eta(), jet2.pt())->GetParameter(2)*jetResScale_;
-  jet2PhiResolution = phiResol_->resolutionEtaPt(jet2.eta(), jet2.pt())->GetParameter(2);
-  jet2EtaResolution = etaResol_->resolutionEtaPt(jet2.eta(), jet2.pt())->GetParameter(2);
+   // get number of vertices
+   double primary_vertex_z = 0;
+   edm::Handle<std::vector<reco::Vertex> > goodVertices;
+   iEvent.getByLabel("goodOfflinePrimaryVertices", "", goodVertices);
+   vertices = goodVertices->size();
+   reco::Vertex primary_vertex = goodVertices->at(0);
+   primary_vertex_z = primary_vertex.z();
 
-  uncorrectedJet1PtResolution  = ptResol_ ->resolutionEtaPt(jet1Uncor.eta(), jet1Uncor.pt())->GetParameter(2);
-  uncorrectedJet1PhiResolution = phiResol_->resolutionEtaPt(jet1Uncor.eta(), jet1Uncor.pt())->GetParameter(2);
-  uncorrectedJet1EtaResolution = etaResol_->resolutionEtaPt(jet1Uncor.eta(), jet1Uncor.pt())->GetParameter(2);
-  uncorrectedJet2PtResolution  = ptResol_ ->resolutionEtaPt(jet2Uncor.eta(), jet2Uncor.pt())->GetParameter(2);
-  uncorrectedJet2PhiResolution = phiResol_->resolutionEtaPt(jet2Uncor.eta(), jet2Uncor.pt())->GetParameter(2);
-  uncorrectedJet2EtaResolution = etaResol_->resolutionEtaPt(jet2Uncor.eta(), jet2Uncor.pt())->GetParameter(2);
 
-  // Now get leptons
-  edm::Handle<edm::View<pat::Electron> > electrons;
-  iEvent.getByLabel(electronTag_, electrons);
-  for( edm::View<pat::Electron>::const_iterator electron = electrons->begin(); electron != electrons->end(); ++electron) {
+   // Get jets that pass the b tag cut
+   edm::Handle<edm::View<pat::Jet> > jets;
+   iEvent.getByLabel(jetTag_,jets);
+   jetcount = 0;
+   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+      if (jet->bDiscriminator(bTagger_) > bTagCut_) {
+         taggedJets_.push_back(*jet);
+         jetcount++;
+      }
+   }
+
+   // Get jets that pass the negative b tag cut
+   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+      if (jet->bDiscriminator(bTagger_) < negTagCut_) {
+         negTaggedJets_.push_back(*jet);
+         jetcount++;
+      }
+   }
+
+   // Now sort the jets by b-tag, then by pt for jets without b-tags
+   // use the JetSorter object js, declared earlier
+   std::sort(taggedJets_.begin(), taggedJets_.end(), js);
+
+   pat::Jet jet1, jet2;
+   if( taggedJets_.size() >= 2 ){
+      jet1 = taggedJets_[0];
+      jet2 = taggedJets_[1];
+   }
+   else return;
+
+   jet1Vz = jet1.vz()-primary_vertex_z;
+   jet2Vz = jet2.vz()-primary_vertex_z;
+   jet1bdisc = jet1.bDiscriminator(bTagger_);
+   jet2bdisc = jet2.bDiscriminator(bTagger_);
+
+   pat::Jet jet1Uncor = jet1.correctedJet(0); // 0 = Uncorrected
+   pat::Jet jet2Uncor = jet2.correctedJet(0);
+   const reco::GenJet *jet1Gen = NULL;
+   const reco::GenJet *jet2Gen = NULL;
+   jet1GenId = 0;
+   jet2GenId = 0;
+   jet1ParentIdGEN = 0;
+   jet2ParentIdGEN = 0;
+   if (runTtbar_) {
+      if (jet1.genJet()){
+         jet1GenId = jet1.partonFlavour();
+         jet1Gen = jet1.genJet();
+      }
+      if(jet1.genParton()){
+         jet1ParentIdGEN = (jet1.genParton())->mother()->pdgId();
+      }
+      if (jet2.genJet()) {
+         jet2GenId = jet2.partonFlavour();
+         jet2Gen = jet2.genJet();
+      }
+      if(jet2.genParton()){
+         jet2ParentIdGEN = (jet2.genParton())->mother()->pdgId();
+      }
+
+      // get gen particles
+      edm::Handle<edm::View<reco::GenParticle> > genParticles;
+      iEvent.getByLabel(genParticleTag_,genParticles);
+      for(edm::View<reco::GenParticle>::const_iterator p = genParticles->begin(); p!=genParticles->end();++p){
+         if( fabs(p->pdgId()) == 6 and (p->daughter(0)) and (p->daughter(1)) ){
+            if (p->pdgId()==6 && (p->daughter(0)->pdgId()==24 || p->daughter(1)->pdgId() == 24)) {
+               t = &*p;
+            }
+            else if (p->pdgId()==-6 && (p->daughter(0)->pdgId()==-24 || p->daughter(1)->pdgId() == -24)){
+               tb = &*p;
+            }
+         }
+      }
+      if (t->daughter(0)->pdgId() == 5 ) {
+         b = (t->daughter(0));
+         Wp = (t->daughter(1));
+      }
+      else {
+         b = (t->daughter(1));
+         Wp = (t->daughter(0));
+      }
+      if (tb->daughter(0)->pdgId() == -5) {
+         bb = (tb->daughter(0));
+         Wm = (tb->daughter(1));
+      }
+      else {
+         bb = (tb->daughter(1));
+         Wm = (tb->daughter(0));
+      }
+
+      if (Wp->daughter(0) and (Wp->daughter(0)->pdgId() == -13 || Wp->daughter(0)->pdgId() == -11) ) {
+         lp = (Wp->daughter(0));
+         n = (Wp->daughter(1));
+      }
+      else if (Wp->daughter(1) and (Wp->daughter(1)->pdgId() == -13 || Wp->daughter(1)->pdgId() == -11)) {
+         lp = (Wp->daughter(1));
+         n = (Wp->daughter(0));
+      }
+      else {
+         //std::cout << "Wp\n";
+         //std::cout << Wp->daughter(1)->pdgId() << std::endl;
+         //std::cout << Wp->daughter(0)->pdgId() << std::endl;
+         //return; // not a dilepton event
+         lp = (Wp->daughter(1));
+         n = (Wp->daughter(0));
+      }
+      if (Wm->daughter(0)->pdgId() == 13 || Wm->daughter(0)->pdgId() == 11) {
+         lm = (Wm->daughter(0));
+         nb = (Wm->daughter(1));
+      }
+      else if (Wm->daughter(1)->pdgId() == 13 || Wm->daughter(1)->pdgId() == 11) {
+         lm = (Wm->daughter(1));
+         nb = (Wm->daughter(0));
+      }
+      else {
+         //std::cout << "Wm\n";
+         //std::cout << Wm->daughter(1)->pdgId() << std::endl;
+         //std::cout << Wm->daughter(0)->pdgId() << std::endl;
+         //return; // not a dilepton event
+         lm = (Wm->daughter(1));
+         nb = (Wm->daughter(0));
+      }
+
+      bGEN.SetPxPyPzE(b->px(), b->py(), b->pz(), b->energy());
+      bbarGEN.SetPxPyPzE(bb->px(), bb->py(), bb->pz(), bb->energy());
+      lpGEN.SetPxPyPzE(lp->px(), lp->py(), lp->pz(), lp->energy());
+      lmGEN.SetPxPyPzE(lm->px(), lm->py(), lm->pz(), lm->energy());
+      nGEN.SetPxPyPzE(n->px(), n->py(), n->pz(), n->energy());
+      nbarGEN.SetPxPyPzE(nb->px(), nb->py(), nb->pz(), nb->energy());
+      lpPdgIdGEN = lp->pdgId();
+      lmPdgIdGEN = lm->pdgId();
+      nPdgIdGEN = n->pdgId();
+      nbPdgIdGEN = nb->pdgId();
+
+   } // if runTtbar_
+   else
+   {
+      bGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
+      bbarGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
+      lpGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
+      lmGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
+      nGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
+      nbarGEN.SetPxPyPzE(0.0,0.0,0.0,0.0);
+      lpPdgIdGEN = 0;
+      lmPdgIdGEN = 0;
+      nPdgIdGEN = 0;
+      nbPdgIdGEN = 0;
+   }
+
+   // get jet resolutions
+   jet1PtResolution  = ptResol_ ->resolutionEtaPt(jet1.eta(), jet1.pt())->GetParameter(2)*jetResScale_;
+   jet1PhiResolution = phiResol_->resolutionEtaPt(jet1.eta(), jet1.pt())->GetParameter(2);
+   jet1EtaResolution = etaResol_->resolutionEtaPt(jet1.eta(), jet1.pt())->GetParameter(2);
+   jet2PtResolution  = ptResol_ ->resolutionEtaPt(jet2.eta(), jet2.pt())->GetParameter(2)*jetResScale_;
+   jet2PhiResolution = phiResol_->resolutionEtaPt(jet2.eta(), jet2.pt())->GetParameter(2);
+   jet2EtaResolution = etaResol_->resolutionEtaPt(jet2.eta(), jet2.pt())->GetParameter(2);
+
+   uncorrectedJet1PtResolution  = ptResol_ ->resolutionEtaPt(jet1Uncor.eta(), jet1Uncor.pt())->GetParameter(2);
+   uncorrectedJet1PhiResolution = phiResol_->resolutionEtaPt(jet1Uncor.eta(), jet1Uncor.pt())->GetParameter(2);
+   uncorrectedJet1EtaResolution = etaResol_->resolutionEtaPt(jet1Uncor.eta(), jet1Uncor.pt())->GetParameter(2);
+   uncorrectedJet2PtResolution  = ptResol_ ->resolutionEtaPt(jet2Uncor.eta(), jet2Uncor.pt())->GetParameter(2);
+   uncorrectedJet2PhiResolution = phiResol_->resolutionEtaPt(jet2Uncor.eta(), jet2Uncor.pt())->GetParameter(2);
+   uncorrectedJet2EtaResolution = etaResol_->resolutionEtaPt(jet2Uncor.eta(), jet2Uncor.pt())->GetParameter(2);
+
+   // Now get leptons
+   edm::Handle<edm::View<pat::Electron> > electrons;
+   iEvent.getByLabel(electronTag_, electrons);
+   for( edm::View<pat::Electron>::const_iterator electron = electrons->begin(); electron != electrons->end(); ++electron) {
       const reco::RecoCandidate* lepton = &*electron;
       goodLeptons_.push_back(lepton);
-  }
-  edm::Handle<edm::View<pat::Muon> > muons;
-  iEvent.getByLabel(muonTag_, muons);
-  for( edm::View<pat::Muon>::const_iterator muon = muons->begin(); muon != muons->end(); ++muon) {
+   }
+   edm::Handle<edm::View<pat::Muon> > muons;
+   iEvent.getByLabel(muonTag_, muons);
+   for( edm::View<pat::Muon>::const_iterator muon = muons->begin(); muon != muons->end(); ++muon) {
       const reco::RecoCandidate* lepton = &*muon;
       goodLeptons_.push_back(lepton);
-  }
+   }
 
-  if (goodLeptons_.size() < 2) return;
-  const reco::RecoCandidate* lep1 = goodLeptons_[0];
-  const reco::RecoCandidate* lep2 = goodLeptons_[1];
-  
-  // get met
-  edm::Handle<edm::View<reco::PFMET> > mets;
-  iEvent.getByLabel(metTag_, mets);
-  reco::PFMET met = mets->front();
+   if (goodLeptons_.size() < 2) return;
+   const reco::RecoCandidate* lep1 = goodLeptons_[0];
+   const reco::RecoCandidate* lep2 = goodLeptons_[1];
 
-  // get pat met for genmet object
-  edm::Handle<edm::View<pat::MET> > pmets;
-  iEvent.getByLabel(pmetTag_, pmets);
-  pat::MET pmet = pmets->front();
-  
+   // get met
+   edm::Handle<edm::View<reco::PFMET> > mets;
+   iEvent.getByLabel(metTag_, mets);
+   reco::PFMET met = mets->front();
+
+   // get pat met for genmet object
+   edm::Handle<edm::View<pat::MET> > pmets;
+   iEvent.getByLabel(pmetTag_, pmets);
+   pat::MET pmet = pmets->front();
+
    // Now set the variables we haven't set yet.
-  jet1FourVector.SetPxPyPzE(jet1.px(), jet1.py(), jet1.pz(), jet1.energy());
-  jet2FourVector.SetPxPyPzE(jet2.px(), jet2.py(), jet2.pz(), jet2.energy());
-  uncorrectedJet1FourVector.SetPxPyPzE(jet1Uncor.px(), jet1Uncor.py(), jet1Uncor.pz(), jet1Uncor.energy());
-  uncorrectedJet2FourVector.SetPxPyPzE(jet2Uncor.px(), jet2Uncor.py(), jet2Uncor.pz(), jet2Uncor.energy());
-  if (jet1Gen!=NULL) generatedJet1FourVector.SetPxPyPzE(jet1Gen->px(), jet1Gen->py(), jet1Gen->pz(), jet1Gen->energy());
-  else generatedJet1FourVector.SetPxPyPzE(0, 0, 0, 0);
-  if (jet2Gen!=NULL) generatedJet2FourVector.SetPxPyPzE(jet2Gen->px(), jet2Gen->py(), jet2Gen->pz(), jet2Gen->energy());
-  else generatedJet2FourVector.SetPxPyPzE(0, 0, 0, 0);
+   jet1FourVector.SetPxPyPzE(jet1.px(), jet1.py(), jet1.pz(), jet1.energy());
+   jet2FourVector.SetPxPyPzE(jet2.px(), jet2.py(), jet2.pz(), jet2.energy());
+   uncorrectedJet1FourVector.SetPxPyPzE(jet1Uncor.px(), jet1Uncor.py(), jet1Uncor.pz(), jet1Uncor.energy());
+   uncorrectedJet2FourVector.SetPxPyPzE(jet2Uncor.px(), jet2Uncor.py(), jet2Uncor.pz(), jet2Uncor.energy());
+   if (jet1Gen!=NULL) generatedJet1FourVector.SetPxPyPzE(jet1Gen->px(), jet1Gen->py(), jet1Gen->pz(), jet1Gen->energy());
+   else generatedJet1FourVector.SetPxPyPzE(0, 0, 0, 0);
+   if (jet2Gen!=NULL) generatedJet2FourVector.SetPxPyPzE(jet2Gen->px(), jet2Gen->py(), jet2Gen->pz(), jet2Gen->energy());
+   else generatedJet2FourVector.SetPxPyPzE(0, 0, 0, 0);
 
-  // met
-  metFourVector.SetPxPyPzE(met.px(), met.py(), met.pz(), met.energy());
+   // met
+   metFourVector.SetPxPyPzE(met.px(), met.py(), met.pz(), met.energy());
 
-    // jet energy scale uncertainty
-  std::string path = std::getenv("CMSSW_BASE");
-    JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( (path+"/src/PhysicsTools/PatUtils/data/Summer13_V4_DATA_Uncertainty_AK5PF.txt").c_str() );
-    double factor = 1;
-    double corr = 0;
-    jecUnc->setJetEta(jet1.eta());
-    jecUnc->setJetPt(jet1.pt());
-    jet1jesuncertainty = jecUnc->getUncertainty(true);
-    if (jetScale_ != 0.) {
-       // back out value of jec factor
-       factor = jet1Uncor.pt() != 0 ? jet1.pt() / jet1Uncor.pt() : 1.0;
-       jecUnc->setJetEta(jet1.eta());
-       jecUnc->setJetPt(jet1.pt());
-       corr = jetScale_*jecUnc->getUncertainty(true)/factor;
-       // correct met first
-       metFourVector -= jet1FourVector*corr;
-       jet1FourVector *= 1+corr;
-    }
-    jecUnc->setJetEta(jet2.eta());
-    jecUnc->setJetPt(jet2.pt());
-    jet2jesuncertainty = jecUnc->getUncertainty(true);
-    if (jetScale_ != 0.) {
-       factor = jet2Uncor.pt() != 0 ? jet2.pt() / jet2Uncor.pt() : 1.0;
-       jecUnc->setJetEta(jet2.eta());
-       jecUnc->setJetPt(jet2.pt());
-       corr = jetScale_*jecUnc->getUncertainty(true)/factor;
-       // correct met first
-       metFourVector -= jet2FourVector*corr;
-       jet2FourVector *= 1+corr;
-    }
-    delete jecUnc;
+   // jet energy scale uncertainty
+   //std::string path = std::getenv("CMSSW_BASE");
+   JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( "data/Summer13_V5_DATA_Uncertainty_AK5PFchs.txt" );
+   double factor = 1;
+   double corr = 0;
+   jecUnc->setJetEta(jet1.eta());
+   jecUnc->setJetPt(jet1.pt());
+   jet1jesuncertainty = jecUnc->getUncertainty(true);
+   if (jetScale_ != 0.) {
+      // back out value of jec factor
+      factor = jet1Uncor.pt() != 0 ? jet1.pt() / jet1Uncor.pt() : 1.0;
+      jecUnc->setJetEta(jet1.eta());
+      jecUnc->setJetPt(jet1.pt());
+      corr = jetScale_*jecUnc->getUncertainty(true)/factor;
+      // correct met first
+      metFourVector -= jet1FourVector*corr;
+      jet1FourVector *= 1+corr;
+   }
+   jecUnc->setJetEta(jet2.eta());
+   jecUnc->setJetPt(jet2.pt());
+   jet2jesuncertainty = jecUnc->getUncertainty(true);
+   if (jetScale_ != 0.) {
+      factor = jet2Uncor.pt() != 0 ? jet2.pt() / jet2Uncor.pt() : 1.0;
+      jecUnc->setJetEta(jet2.eta());
+      jecUnc->setJetPt(jet2.pt());
+      corr = jetScale_*jecUnc->getUncertainty(true)/factor;
+      // correct met first
+      metFourVector -= jet2FourVector*corr;
+      jet2FourVector *= 1+corr;
+   }
+   delete jecUnc;
 
-  numBJets = taggedJets_.size();
+   numBJets = taggedJets_.size();
 
-  lepton1FourVector.SetPxPyPzE(lep1->px(), lep1->py(), lep1->pz(), lep1->energy());
-  lepton2FourVector.SetPxPyPzE(lep2->px(), lep2->py(), lep2->pz(), lep2->energy());
+   lep1FourVector.SetPxPyPzE(lep1->px(), lep1->py(), lep1->pz(), lep1->energy());
+   lep2FourVector.SetPxPyPzE(lep2->px(), lep2->py(), lep2->pz(), lep2->energy());
 
-  PDG1 = lep1->pdgId();
-  PDG2 = lep2->pdgId();
+   PDG1 = lep1->pdgId();
+   PDG2 = lep2->pdgId();
 
-	if (runTtbar_) {
-	  generatedMetFourVector.SetPxPyPzE(pmet.genMET()->px(), pmet.genMET()->py(), pmet.genMET()->pz(), pmet.genMET()->energy());
-	}
-  metSignificanceMatrix = met.getSignificanceMatrix();
+   if (runTtbar_) {
+      generatedMetFourVector.SetPxPyPzE(pmet.genMET()->px(), pmet.genMET()->py(), pmet.genMET()->pz(), pmet.genMET()->energy());
+   }
 
-  // jet-met smearing
-  if( runOnMC_ ){
-     TRandom3* rand = new TRandom3(randSeed_+10E6);
-     double met_dx = 0;
-     double met_dy = 0;
+   // jets+met smearing factors
 
-     for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
-        double ptres = jet->pt()*ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
+   double met_dx = 0;
+   double met_dy = 0;
+   double jet1_dpt = 0;
+   double jet2_dpt = 0;
 
-        double c = 1.0;
-        if( fabs(jet->eta()) < 0.5 ) c = 1.052;
-        else if( fabs(jet->eta()) < 1.1 ) c = 1.057;
-        else if( fabs(jet->eta()) < 1.7 ) c = 1.096;
-        else if( fabs(jet->eta()) < 2.3 ) c = 1.134;
-        else if( fabs(jet->eta()) < 5.0 ) c = 1.288;
+   if( runOnMC_ ){
+      TRandom3* rand = new TRandom3(randSeed_+10E6);
+      for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+         double ptres = jet->pt()*ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
 
-        double s = 0.0;
-        if( jet->pt() > 10 ){ //smear
-           s = rand->Gaus(0.0,ptres*sqrt(c*c-1));
-           met_dx -= s/sqrt(2);
-           met_dy -= s/sqrt(2);
-           if( jet->pt() == jet1FourVector.Pt() ){
-              jet1FourVector.SetPx( jet1FourVector.Px()+(s/sqrt(2)) );
-              jet1FourVector.SetPy( jet1FourVector.Py()+(s/sqrt(2)) );
-           }
-           if( jet->pt() == jet2FourVector.Pt() ){
-              jet2FourVector.SetPx( jet2FourVector.Px()+(s/sqrt(2)) );
-              jet2FourVector.SetPy( jet2FourVector.Py()+(s/sqrt(2)) );
-           }
-        }
-     }
-     metFourVector.SetPx( metFourVector.Px()+met_dx );
-     metFourVector.SetPy( metFourVector.Py()+met_dy );
+         double c = 1.0;
+         if( fabs(jet->eta()) < 0.5 ) c = 1.052;
+         else if( fabs(jet->eta()) < 1.1 ) c = 1.057;
+         else if( fabs(jet->eta()) < 1.7 ) c = 1.096;
+         else if( fabs(jet->eta()) < 2.3 ) c = 1.134;
+         else if( fabs(jet->eta()) < 5.0 ) c = 1.288;
 
-  }
+         double s = 0.0;
+         if( jet->pt() > 10 ){ //smear
+            s = rand->Gaus(0.0,ptres*sqrt(c*c-1));
+            met_dx -= s/sqrt(2);
+            met_dy -= s/sqrt(2);
+            if( jet->pt() == jet1FourVector.Pt() ){
+               jet1_dpt = s;
+            }
+            if( jet->pt() == jet2FourVector.Pt() ){
+               jet2_dpt = s;
+            }
+         }
+      }
+   }
 
-  tree->Fill();
+   //
+   // fill tree for central sample (no systematic variations applied)
+   //
+   metFourVector.SetPx( metFourVector.Px()+met_dx );
+   metFourVector.SetPy( metFourVector.Py()+met_dy );
+
+   jet1FourVector.SetPx( jet1FourVector.Px()+(jet1_dpt/sqrt(2)) );
+   jet1FourVector.SetPy( jet1FourVector.Py()+(jet1_dpt/sqrt(2)) );
+
+   jet2FourVector.SetPx( jet2FourVector.Px()+(jet2_dpt/sqrt(2)) );
+   jet2FourVector.SetPy( jet2FourVector.Py()+(jet2_dpt/sqrt(2)) );
+
+   // fill tree
+   trees["Central"]->Fill();
+
+   //
+   // fill trees for systematics samples
+   //
+   calculateSystematics( iEvent, metFourVector, jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+   for( std::map<std::string, TLorentzVector>::iterator syst = metsyst.begin(); syst != metsyst.end(); syst++ ){
+
+      std::string name = syst->first;
+
+      // get syst varied quantities
+      metFourVector = metsyst[name];
+      jet1FourVector = jet1syst[name];
+      jet2FourVector = jet2syst[name];
+      lep1FourVector = lep1syst[name];
+      lep2FourVector = lep2syst[name];
+
+      // apply jet smearing
+      metFourVector.SetPx( metFourVector.Px()+met_dx );
+      metFourVector.SetPy( metFourVector.Py()+met_dy );
+
+      jet1FourVector.SetPx( jet1FourVector.Px()+(jet1_dpt/sqrt(2)) );
+      jet1FourVector.SetPy( jet1FourVector.Py()+(jet1_dpt/sqrt(2)) );
+
+      jet2FourVector.SetPx( jet2FourVector.Px()+(jet2_dpt/sqrt(2)) );
+      jet2FourVector.SetPy( jet2FourVector.Py()+(jet2_dpt/sqrt(2)) );
+
+      // fill syst tree
+      trees[name]->Fill();
+   }
+
 }
 
+   void
+MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector met, const TLorentzVector jet1, const TLorentzVector jet2,
+      const TLorentzVector lep1, const TLorentzVector lep2)
+{
+   // Instantiate uncertainty sources
+   std::vector<JetCorrectionUncertainty*> vsrc(systnames.size());
+   std::string sgn [2] = {"DN","UP"};
+
+   for (unsigned int isrc = 0; isrc < systnames.size(); isrc++) {
+
+      const char *name = systnames[isrc].c_str();
+      JetCorrectorParameters *p = new JetCorrectorParameters("data/Summer13_V5_DATA_UncertaintySources_AK5PFchs.txt", name);
+      JetCorrectionUncertainty *unc = new JetCorrectionUncertainty(*p);
+      vsrc[isrc] = unc;
+
+      for(int i=0; i < 2; i++){
+         metsyst[name+sgn[i]] = met;
+         jet1syst[name+sgn[i]] = jet1;
+         jet2syst[name+sgn[i]] = jet2;
+         lep1syst[name+sgn[i]] = lep1;
+         lep2syst[name+sgn[i]] = lep2;
+      }
+
+      //delete p;
+      //delete unc;
+      
+   } // for isrc
+
+   edm::Handle<edm::View<pat::Jet> > jets;
+   iEvent.getByLabel(jetTag_,jets);
+
+   // loop over uncertainty sources
+   for (unsigned int isrc = 0; isrc < systnames.size(); isrc++) {
+      JetCorrectionUncertainty *unc = vsrc[isrc];
+
+      // up and down variations
+      for(int i=0; i < 2; i++){
+         std::string name = systnames[isrc]+sgn[i];
+
+         // loop over all jets
+         for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+
+            TLorentzVector jetFourVector;
+            jetFourVector.SetPxPyPzE(jet->px(), jet->py(), jet->pz(), jet->energy());
+
+            unc->setJetPt(jet->pt());
+            unc->setJetEta(jet->eta());
+            int sign = i == 0 ? -1 : 1;
+            double var = sign*unc->getUncertainty(i); // 0 for down, 1 for up
+
+            // get the uncorrected jet
+            pat::Jet jetUncor = jet->correctedJet(0);
+
+            // back out the correction factor
+            double factor = jetUncor.pt() != 0 ? jet->pt() / jetUncor.pt() : 1.0;
+
+            bool isJet1 = jetFourVector.Pt() == jet1syst[name].Pt();
+            bool isJet2 = jetFourVector.Pt() == jet2syst[name].Pt();
+
+            // correct met first
+            metsyst[name] -= jetFourVector*(var/factor);
+            jetFourVector *= 1+(var/factor);
+            if( isJet1 ) jet1syst[name] = jetFourVector;
+            if( isJet2 ) jet2syst[name] = jetFourVector;
+
+         }
+      } // up and down
+   } // for isrc
+
+   return;
+}
 
 // ------------ method called once each job just before starting event loop  ------------
-void 
+   void 
 MakeNtuple::beginJob()
 {
 
-  // pile up reweighting
-  std::vector< float > PU2012_MC;
-  std::vector< float > PU2012_Data;
+   // pile up reweighting
+   std::vector< float > PU2012_MC;
+   std::vector< float > PU2012_Data;
 
-  for( int i=0; i<60; i++) {
-     PU2012_MC.push_back( PU2012_MCf[i] );
-     PU2012_Data.push_back( PU2012_Dataf[i] );
-  }
-  LumiWeights_ = edm::LumiReWeighting( PU2012_MC, PU2012_Data);
+   for( int i=0; i<60; i++) {
+      PU2012_MC.push_back( PU2012_MCf[i] );
+      PU2012_Data.push_back( PU2012_Dataf[i] );
+   }
+   LumiWeights_ = edm::LumiReWeighting( PU2012_MC, PU2012_Data);
 
 
-  file = new TFile(outFileName_.c_str(), "RECREATE");
-  file->cd();
-  treeData = new TTree("RealData", "RealData");
+   file = new TFile(outFileName_.c_str(), "RECREATE");
+   file->cd();
+   trees["Central"] = new TTree("Central", "Central");
 
-  treeData->Branch("jet1FourVector", &jet1FourVector);
-  treeData->Branch("jet1PtResolution", &jet1PtResolution);
-  treeData->Branch("jet1PhiResolution", &jet1PhiResolution);
-  treeData->Branch("jet1EtaResolution", &jet1EtaResolution);
+   trees["Central"]->Branch("jet1FourVector", &jet1FourVector);
+   trees["Central"]->Branch("jet1PtResolution", &jet1PtResolution);
+   trees["Central"]->Branch("jet1PhiResolution", &jet1PhiResolution);
+   trees["Central"]->Branch("jet1EtaResolution", &jet1EtaResolution);
 
-  treeData->Branch("jet2FourVector", &jet2FourVector);
-  treeData->Branch("jet2PtResolution", &jet2PtResolution);
-  treeData->Branch("jet2PhiResolution", &jet2PhiResolution);
-  treeData->Branch("jet2EtaResolution", &jet2EtaResolution);
+   trees["Central"]->Branch("jet2FourVector", &jet2FourVector);
+   trees["Central"]->Branch("jet2PtResolution", &jet2PtResolution);
+   trees["Central"]->Branch("jet2PhiResolution", &jet2PhiResolution);
+   trees["Central"]->Branch("jet2EtaResolution", &jet2EtaResolution);
 
-  treeData->Branch("lepton1FourVector", &lepton1FourVector);
-  treeData->Branch("lepton2FourVector", &lepton2FourVector);
+   trees["Central"]->Branch("lep1FourVector", &lep1FourVector);
+   trees["Central"]->Branch("lep2FourVector", &lep2FourVector);
 
-  treeData->Branch("uncorrectedJet1FourVector", &uncorrectedJet1FourVector);
-  treeData->Branch("uncorrectedJet1PtResolution", &uncorrectedJet1PtResolution);
-  treeData->Branch("uncorrectedJet1PhiResolution", &uncorrectedJet1PhiResolution);
-  treeData->Branch("uncorrectedJet1EtaResolution", &uncorrectedJet1EtaResolution);
+   trees["Central"]->Branch("uncorrectedJet1FourVector", &uncorrectedJet1FourVector);
+   trees["Central"]->Branch("uncorrectedJet1PtResolution", &uncorrectedJet1PtResolution);
+   trees["Central"]->Branch("uncorrectedJet1PhiResolution", &uncorrectedJet1PhiResolution);
+   trees["Central"]->Branch("uncorrectedJet1EtaResolution", &uncorrectedJet1EtaResolution);
 
-  treeData->Branch("uncorrectedJet2FourVector", &uncorrectedJet2FourVector);
-  treeData->Branch("uncorrectedJet2PtResolution", &uncorrectedJet2PtResolution);
-  treeData->Branch("uncorrectedJet2PhiResolution", &uncorrectedJet2PhiResolution);
-  treeData->Branch("uncorrectedJet2EtaResolution", &uncorrectedJet2EtaResolution);
+   trees["Central"]->Branch("uncorrectedJet2FourVector", &uncorrectedJet2FourVector);
+   trees["Central"]->Branch("uncorrectedJet2PtResolution", &uncorrectedJet2PtResolution);
+   trees["Central"]->Branch("uncorrectedJet2PhiResolution", &uncorrectedJet2PhiResolution);
+   trees["Central"]->Branch("uncorrectedJet2EtaResolution", &uncorrectedJet2EtaResolution);
 
-  treeData->Branch("jet1JESUncertainty", &jet1jesuncertainty);
-  treeData->Branch("jet2JESUncertainty", &jet2jesuncertainty);
+   trees["Central"]->Branch("jet1JESUncertainty", &jet1jesuncertainty);
+   trees["Central"]->Branch("jet2JESUncertainty", &jet2jesuncertainty);
 
-  treeData->Branch("metFourVector", &metFourVector);
-  treeData->Branch("metSignificanceMatrix", &metSignificanceMatrix);
+   trees["Central"]->Branch("metFourVector", &metFourVector);
 
-  treeData->Branch("PDG1", &PDG1);
-  treeData->Branch("PDG2", &PDG2);
-  treeData->Branch("vertices", &vertices);
-  treeData->Branch("numBJets", &numBJets);
-  treeData->Branch("jetnumber",&jetcount);
-  treeData->Branch("jet1Vz",&jet1Vz);
-  treeData->Branch("jet2Vz",&jet2Vz);
-  treeData->Branch("jet1bdisc",&jet1bdisc);
-  treeData->Branch("jet2bdisc",&jet2bdisc);
+   trees["Central"]->Branch("PDG1", &PDG1);
+   trees["Central"]->Branch("PDG2", &PDG2);
+   trees["Central"]->Branch("vertices", &vertices);
+   trees["Central"]->Branch("numBJets", &numBJets);
+   trees["Central"]->Branch("jetnumber",&jetcount);
+   trees["Central"]->Branch("jet1Vz",&jet1Vz);
+   trees["Central"]->Branch("jet2Vz",&jet2Vz);
+   trees["Central"]->Branch("jet1bdisc",&jet1bdisc);
+   trees["Central"]->Branch("jet2bdisc",&jet2bdisc);
 
-  if (runOnMC_) {
-     treeData->Branch("puMyWeight", &MyWeight);
-     treeData->Branch("puTnvtx", &T_nvertices);
-  }
-  if (runTtbar_) {
-     treeData->Branch("jet1GenId", &jet1GenId);
-     treeData->Branch("jet2GenId", &jet2GenId);
-     treeData->Branch("generatedMetFourVector", &generatedMetFourVector);
-     treeData->Branch("generatedJet1FourVector", &generatedJet1FourVector);
-     treeData->Branch("generatedJet2FourVector", &generatedJet2FourVector);
-     treeData->Branch("bGEN", &bGEN);
-     treeData->Branch("bbarGEN", &bbarGEN);
-     treeData->Branch("lpGEN", &lpGEN);
-     treeData->Branch("lmGEN", &lmGEN);
-     treeData->Branch("nGEN", &nGEN);
-     treeData->Branch("nbarGEN", &nbarGEN);
-     treeData->Branch("lpPdgIdGEN", &lpPdgIdGEN);
-     treeData->Branch("lmPdgIdGEN", &lmPdgIdGEN);
-     treeData->Branch("nPdgIdGEN", &nPdgIdGEN);
-     treeData->Branch("nbPdgIdGEN", &nbPdgIdGEN);
-     treeData->Branch("jet1ParentIdGEN", &jet1ParentIdGEN);
-     treeData->Branch("jet2ParentIdGEN", &jet2ParentIdGEN);
-     treeData->Branch("geninfo_pid", &geninfo_pid);
-     treeData->Branch("geninfo_pthat", &geninfo_pthat);
-     treeData->Branch("geninfo_weight", &geninfo_weight);
-     treeData->Branch("geninfo_xsec", &geninfo_xsec);
-     treeData->Branch("geninfo_eff", &geninfo_eff);
-     treeData->Branch("geninfo_alphaQCD", &geninfo_alphaQCD);
-     treeData->Branch("geninfo_alphaQED", &geninfo_alphaQED);
-  }
+   if (runOnMC_) {
+      trees["Central"]->Branch("puMyWeight", &MyWeight);
+      trees["Central"]->Branch("puTnvtx", &T_nvertices);
+   }
+   if (runTtbar_) {
+      trees["Central"]->Branch("jet1GenId", &jet1GenId);
+      trees["Central"]->Branch("jet2GenId", &jet2GenId);
+      trees["Central"]->Branch("generatedMetFourVector", &generatedMetFourVector);
+      trees["Central"]->Branch("generatedJet1FourVector", &generatedJet1FourVector);
+      trees["Central"]->Branch("generatedJet2FourVector", &generatedJet2FourVector);
+      trees["Central"]->Branch("bGEN", &bGEN);
+      trees["Central"]->Branch("bbarGEN", &bbarGEN);
+      trees["Central"]->Branch("lpGEN", &lpGEN);
+      trees["Central"]->Branch("lmGEN", &lmGEN);
+      trees["Central"]->Branch("nGEN", &nGEN);
+      trees["Central"]->Branch("nbarGEN", &nbarGEN);
+      trees["Central"]->Branch("lpPdgIdGEN", &lpPdgIdGEN);
+      trees["Central"]->Branch("lmPdgIdGEN", &lmPdgIdGEN);
+      trees["Central"]->Branch("nPdgIdGEN", &nPdgIdGEN);
+      trees["Central"]->Branch("nbPdgIdGEN", &nbPdgIdGEN);
+      trees["Central"]->Branch("jet1ParentIdGEN", &jet1ParentIdGEN);
+      trees["Central"]->Branch("jet2ParentIdGEN", &jet2ParentIdGEN);
+      trees["Central"]->Branch("geninfo_pid", &geninfo_pid);
+      trees["Central"]->Branch("geninfo_pthat", &geninfo_pthat);
+      trees["Central"]->Branch("geninfo_weight", &geninfo_weight);
+      trees["Central"]->Branch("geninfo_xsec", &geninfo_xsec);
+      trees["Central"]->Branch("geninfo_eff", &geninfo_eff);
+      trees["Central"]->Branch("geninfo_alphaQCD", &geninfo_alphaQCD);
+      trees["Central"]->Branch("geninfo_alphaQED", &geninfo_alphaQED);
+   }
 
-  treeData->Branch("run", &(this_event_id.run));
-  treeData->Branch("lumi", &(this_event_id.lumi));
-  treeData->Branch("event", &(this_event_id.event));
+   trees["Central"]->Branch("run", &(this_event_id.run));
+   trees["Central"]->Branch("lumi", &(this_event_id.lumi));
+   trees["Central"]->Branch("event", &(this_event_id.event));
 
-  treeBkg = treeData->CloneTree(0);
-  treeBkg->SetName("buBkg");
-  treeBkg->SetTitle("buBkg");
+   systnames.push_back("CorrelationGroupMPFInSitu");
+   systnames.push_back("CorrelationGroupFlavor");
+   systnames.push_back("CorrelationGroupIntercalibration");
+   systnames.push_back("CorrelationGroupUncorrelated");
+   systnames.push_back("CorrelationGroupbJES");
+   systnames.push_back("Total");
 
-  treeBkg2 = treeData->CloneTree(0);
-  treeBkg2->SetName("uuBkg");
-  treeBkg2->SetTitle("uuBkg");
+   std::string sgn [2] = {"DN","UP"};
+   for(std::vector<std::string>::iterator syst = systnames.begin(); syst != systnames.end(); syst++){
+      for(int i=0; i < 2; i++){
+         std::string name = *syst+sgn[i];
+         trees[name] = trees["Central"]->CloneTree(0);
+         trees[name]->SetName(name.c_str());
+         trees[name]->SetTitle(name.c_str());
+      }
+   }
 
 }
 
 
 // ------------ method called once each job just after ending the event loop  ------------
-void 
+   void 
 MakeNtuple::endJob() 
 {
    file->Write();
@@ -865,25 +975,25 @@ MakeNtuple::endJob()
 }
 
 // ------------ method called when starting to processes a run  ------------
-void 
+   void 
 MakeNtuple::beginRun(edm::Run const&, edm::EventSetup const&)
 {
 }
 
 // ------------ method called when ending the processing of a run  ------------
-void 
+   void 
 MakeNtuple::endRun(edm::Run const&, edm::EventSetup const&)
 {
 }
 
 // ------------ method called when starting to processes a luminosity block  ------------
-void 
+   void 
 MakeNtuple::beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
 {
 }
 
 // ------------ method called when ending the processing of a luminosity block  ------------
-void 
+   void 
 MakeNtuple::endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
 {
 }
