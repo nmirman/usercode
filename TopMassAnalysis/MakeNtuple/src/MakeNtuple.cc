@@ -735,6 +735,11 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       }
    }
 
+   // 
+   // use original objects to calculate JES systematics (should be accessed with const)
+   //
+   calculateSystematics( iEvent, metFourVector, jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+
    //
    // fill tree for central sample (no systematic variations applied)
    //
@@ -753,7 +758,6 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    //
    // fill trees for systematics samples
    //
-   calculateSystematics( iEvent, metFourVector, jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
    for( std::map<std::string, TLorentzVector>::iterator syst = metsyst.begin(); syst != metsyst.end(); syst++ ){
 
       std::string name = syst->first;
