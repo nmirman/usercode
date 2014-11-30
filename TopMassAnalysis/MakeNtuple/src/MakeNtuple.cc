@@ -121,6 +121,16 @@ class MakeNtuple : public edm::EDAnalyzer {
       virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
       virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
 
+      bool passOfflineSelection( const TLorentzVector met,
+               const TLorentzVector jet1, const TLorentzVector jet2,
+               const TLorentzVector lep1, const TLorentzVector lep2 );
+      void getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
+            const TLorentzVector jet1, const TLorentzVector jet2,
+            double *jet1_dpt, double *jet2_dpt, double *met_dx, double *met_dy );
+      void smearJetsMET(
+            const TLorentzVector jet1uns, const TLorentzVector jet2uns, const TLorentzVector metuns,
+            TLorentzVector& jet1, TLorentzVector& jet2, TLorentzVector& met,
+            double jet1_pt, double jet2_pt, double met_dx, double met_dy );
       void calculateSystematics( const edm::Event&, const TLorentzVector met, const TLorentzVector jet1, const TLorentzVector jet2,
             const TLorentzVector lep1, const TLorentzVector lep2);
 
@@ -182,7 +192,11 @@ class MakeNtuple : public edm::EDAnalyzer {
       static const double PU2012_MCf[60];
       static const double PU2012_Dataf[60];
       edm::LumiReWeighting LumiWeights_;
+      reweight::PoissonMeanShifter PShiftUp_;
+      reweight::PoissonMeanShifter PShiftDown_;
       float MyWeight;
+      float TotalWeight_plus;
+      float TotalWeight_minus;
       float T_nvertices;
 
       int geninfo_pid;
@@ -194,6 +208,7 @@ class MakeNtuple : public edm::EDAnalyzer {
       float geninfo_alphaQED;
 
       std::vector<std::string> systnames;
+      std::vector<std::string> jsystnames;
       std::map<std::string, TLorentzVector> metsyst, jet1syst, jet2syst, lep1syst, lep2syst;
 
 };
@@ -440,6 +455,9 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
          MyWeight = LumiWeights_.weight( Tnvtx );
          T_nvertices = Tnvtx;
+
+         TotalWeight_plus = MyWeight*PShiftUp_.ShiftWeight( Tnvtx );
+         TotalWeight_minus = MyWeight*PShiftDown_.ShiftWeight( Tnvtx );
       }
 
    }
@@ -496,6 +514,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    jet2GenId = 0;
    jet1ParentIdGEN = 0;
    jet2ParentIdGEN = 0;
+   double t_pt=0, tb_pt=0;
    if (runTtbar_) {
       if (jet1.genJet()){
          jet1GenId = jet1.partonFlavour();
@@ -585,6 +604,9 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       lmPdgIdGEN = lm->pdgId();
       nPdgIdGEN = n->pdgId();
       nbPdgIdGEN = nb->pdgId();
+
+      t_pt = t->pt();
+      tb_pt = tb->pt();
 
    } // if runTtbar_
    else
@@ -701,39 +723,72 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       generatedMetFourVector.SetPxPyPzE(pmet.genMET()->px(), pmet.genMET()->py(), pmet.genMET()->pz(), pmet.genMET()->energy());
    }
 
-   // jets+met smearing factors
-
-   double met_dx = 0;
-   double met_dy = 0;
-   double jet1_dpt = 0;
-   double jet2_dpt = 0;
-
+   /*
    if( runOnMC_ ){
       TRandom3* rand = new TRandom3(randSeed_+10E6);
       for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
-         double ptres = jet->pt()*ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
+         for(int i=0; i < 3; i++){
+            double ptres = jet->pt()*ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
 
-         double c = 1.0;
-         if( fabs(jet->eta()) < 0.5 ) c = 1.052;
-         else if( fabs(jet->eta()) < 1.1 ) c = 1.057;
-         else if( fabs(jet->eta()) < 1.7 ) c = 1.096;
-         else if( fabs(jet->eta()) < 2.3 ) c = 1.134;
-         else if( fabs(jet->eta()) < 5.0 ) c = 1.288;
-
-         double s = 0.0;
-         if( jet->pt() > 10 ){ //smear
-            s = rand->Gaus(0.0,ptres*sqrt(c*c-1));
-            met_dx -= s/sqrt(2);
-            met_dy -= s/sqrt(2);
-            if( jet->pt() == jet1FourVector.Pt() ){
-               jet1_dpt = s;
+            // get 8 TeV scale factors from
+            // https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
+            double c = 1.0;
+            if( i==0 ){ // central
+               if( fabs(jet->eta()) < 0.5 ) c = 1.079;
+               else if( fabs(jet->eta()) < 1.1 ) c = 1.099;
+               else if( fabs(jet->eta()) < 1.7 ) c = 1.121;
+               else if( fabs(jet->eta()) < 2.3 ) c = 1.208;
+               else if( fabs(jet->eta()) < 2.8 ) c = 1.254;
+               else if( fabs(jet->eta()) < 3.2 ) c = 1.395;
+               else if( fabs(jet->eta()) < 5.0 ) c = 1.056;
+            }else if( i==1 ){ // up
+               if( fabs(jet->eta()) < 0.5 ) c = 1.053;
+               else if( fabs(jet->eta()) < 1.1 ) c = 1.071;
+               else if( fabs(jet->eta()) < 1.7 ) c = 1.192;
+               else if( fabs(jet->eta()) < 2.3 ) c = 1.162;
+               else if( fabs(jet->eta()) < 2.8 ) c = 1.192;
+               else if( fabs(jet->eta()) < 3.2 ) c = 1.332;
+               else if( fabs(jet->eta()) < 5.0 ) c = 0.865;
+            }else if( i==2 ){ // down
+               if( fabs(jet->eta()) < 0.5 ) c = 1.105;
+               else if( fabs(jet->eta()) < 1.1 ) c = 1.127;
+               else if( fabs(jet->eta()) < 1.7 ) c = 1.150;
+               else if( fabs(jet->eta()) < 2.3 ) c = 1.254;
+               else if( fabs(jet->eta()) < 2.8 ) c = 1.316;
+               else if( fabs(jet->eta()) < 3.2 ) c = 1.458;
+               else if( fabs(jet->eta()) < 5.0 ) c = 1.247;
             }
-            if( jet->pt() == jet2FourVector.Pt() ){
-               jet2_dpt = s;
+
+            double s = 0.0;
+            if( jet->pt() > 10 ){ //smear
+               s = rand->Gaus(0.0,ptres*sqrt(c*c-1));
+               met_dx[i] -= s/sqrt(2);
+               met_dy[i] -= s/sqrt(2);
+               if( jet->pt() == jet1FourVector.Pt() ){
+                  jet1_dpt[i] = s;
+               }
+               if( jet->pt() == jet2FourVector.Pt() ){
+                  jet2_dpt[i] = s;
+               }
             }
          }
       }
    }
+   */
+
+   // save unsmeared jets and met
+   TLorentzVector jet1Unsmeared = jet1FourVector;
+   TLorentzVector jet2Unsmeared = jet2FourVector;
+   TLorentzVector metUnsmeared = metFourVector;
+   bool pass_selection = false;
+
+   // jets+met smearing factors
+   // with JER systematic variations
+   double met_dx [3] = {0};
+   double met_dy [3] = {0};
+   double jet1_dpt [3] = {0};
+   double jet2_dpt [3] = {0};
+   if( runOnMC_ ) getSmearingFactors( jets, jet1FourVector, jet2FourVector, jet1_dpt, jet2_dpt, met_dx, met_dy );
 
    // 
    // use original objects to calculate JES systematics (should be accessed with const)
@@ -743,17 +798,27 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    //
    // fill tree for central sample (no systematic variations applied)
    //
-   metFourVector.SetPx( metFourVector.Px()+met_dx );
-   metFourVector.SetPy( metFourVector.Py()+met_dy );
+   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
+         jet1FourVector, jet2FourVector, metFourVector,
+         jet1_dpt[0], jet2_dpt[0], met_dx[0], met_dy[0] ); 
+   pass_selection = passOfflineSelection( metFourVector,
+         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+   if( pass_selection ) trees["Central"]->Fill();
 
-   jet1FourVector.SetPx( jet1FourVector.Px()+(jet1_dpt/sqrt(2)) );
-   jet1FourVector.SetPy( jet1FourVector.Py()+(jet1_dpt/sqrt(2)) );
+   // jet energy resolution systematics
+   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
+         jet1FourVector, jet2FourVector, metFourVector,
+         jet1_dpt[1], jet2_dpt[1], met_dx[1], met_dy[1] ); 
+   pass_selection = passOfflineSelection( metFourVector,
+         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+   if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
 
-   jet2FourVector.SetPx( jet2FourVector.Px()+(jet2_dpt/sqrt(2)) );
-   jet2FourVector.SetPy( jet2FourVector.Py()+(jet2_dpt/sqrt(2)) );
-
-   // fill tree
-   trees["Central"]->Fill();
+   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
+         jet1FourVector, jet2FourVector, metFourVector,
+         jet1_dpt[2], jet2_dpt[2], met_dx[2], met_dy[2] ); 
+   pass_selection = passOfflineSelection( metFourVector,
+         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+   if( pass_selection ) trees["JetEnergyResolutionUP"]->Fill();
 
    //
    // fill trees for systematics samples
@@ -769,33 +834,163 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       lep1FourVector = lep1syst[name];
       lep2FourVector = lep2syst[name];
 
+      jet1Unsmeared = jet1FourVector;
+      jet2Unsmeared = jet2FourVector;
+      metUnsmeared = metFourVector;
+
+      // pile up systematic
+      if( name == "PileUpUP" ) MyWeight = TotalWeight_plus;
+      if( name == "PileUpDN" ) MyWeight = TotalWeight_minus;
+
+      // top pt reweighting
+      double a = 0.148;
+      double b = -0.00129;
+      if( name.find("PtTopReweighting") != std::string::npos ) MyWeight *= sqrt( exp(a+b*t_pt)*exp(a+b*tb_pt) );
+
       // apply jet smearing
-      metFourVector.SetPx( metFourVector.Px()+met_dx );
-      metFourVector.SetPy( metFourVector.Py()+met_dy );
-
-      jet1FourVector.SetPx( jet1FourVector.Px()+(jet1_dpt/sqrt(2)) );
-      jet1FourVector.SetPy( jet1FourVector.Py()+(jet1_dpt/sqrt(2)) );
-
-      jet2FourVector.SetPx( jet2FourVector.Px()+(jet2_dpt/sqrt(2)) );
-      jet2FourVector.SetPy( jet2FourVector.Py()+(jet2_dpt/sqrt(2)) );
+      smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
+            jet1FourVector, jet2FourVector, metFourVector,
+            jet1_dpt[0], jet2_dpt[0], met_dx[0], met_dy[0] ); 
 
       // fill syst tree
-      trees[name]->Fill();
+      pass_selection = passOfflineSelection( metFourVector,
+            jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+      if( pass_selection ) trees[name]->Fill();
    }
 
 }
 
+   bool
+MakeNtuple::passOfflineSelection( const TLorentzVector met,
+      const TLorentzVector jet1, const TLorentzVector jet2,
+      const TLorentzVector lep1, const TLorentzVector lep2 ){
+
+   double met_pt = 40; // only for ee and mumu events
+   double jet_pt = 30;
+   double jet_eta = 2.5;
+   double mu_pt = 20;
+   double mu_eta = 2.4;
+   double e_pt = 20;
+   double e_eta = 2.5;
+   // skipping dilepton mass criteria
+
+   // ##### TEMPORARY SOLUTION ##### TODO
+   
+   met_pt = 45;
+   jet_pt = 35;
+   mu_pt = 21;
+   e_pt = 21;
+   
+   // ##### TEMPORARY SOLUTION ##### TODO
+
+   bool met_ok = (abs(PDG1) != abs(PDG2)) or (met.Pt() > met_pt);
+   bool jet1_ok = jet1.Pt() > jet_pt and jet1.Eta() < jet_eta;
+   bool jet2_ok = jet2.Pt() > jet_pt and jet2.Eta() < jet_eta;
+   bool lep1_ok = abs(PDG1) == 11 ? (lep1.Pt() > e_pt and lep1.Eta() < e_eta)
+                                 : (lep1.Pt() > mu_pt and lep1.Eta() < mu_eta);
+   bool lep2_ok = abs(PDG1) == 11 ? (lep2.Pt() > e_pt and lep2.Eta() < e_eta)
+                                 : (lep2.Pt() > mu_pt and lep2.Eta() < mu_eta);
+
+   return (met_ok and jet1_ok and jet2_ok and lep1_ok and lep2_ok);
+}
+
    void
-MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector met, const TLorentzVector jet1, const TLorentzVector jet2,
+MakeNtuple::getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
+      const TLorentzVector jet1, const TLorentzVector jet2,
+      double *jet1_dpt, double *jet2_dpt, double *met_dx, double *met_dy ){
+
+   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+      for(int i=0; i < 2; i++){
+         
+         // get 8 TeV scale factors from
+         // https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
+         double c = 1.0;
+         if( i==0 ){ // central
+            if( fabs(jet->eta()) < 0.5 ) c = 1.079;
+            else if( fabs(jet->eta()) < 1.1 ) c = 1.099;
+            else if( fabs(jet->eta()) < 1.7 ) c = 1.121;
+            else if( fabs(jet->eta()) < 2.3 ) c = 1.208;
+            else if( fabs(jet->eta()) < 2.8 ) c = 1.254;
+            else if( fabs(jet->eta()) < 3.2 ) c = 1.395;
+            else if( fabs(jet->eta()) < 5.0 ) c = 1.056;
+         }else if( i==1 ){ // up
+            if( fabs(jet->eta()) < 0.5 ) c = 1.053;
+            else if( fabs(jet->eta()) < 1.1 ) c = 1.071;
+            else if( fabs(jet->eta()) < 1.7 ) c = 1.192;
+            else if( fabs(jet->eta()) < 2.3 ) c = 1.162;
+            else if( fabs(jet->eta()) < 2.8 ) c = 1.192;
+            else if( fabs(jet->eta()) < 3.2 ) c = 1.332;
+            else if( fabs(jet->eta()) < 5.0 ) c = 0.865;
+         }else if( i==2 ){ // down
+            if( fabs(jet->eta()) < 0.5 ) c = 1.105;
+            else if( fabs(jet->eta()) < 1.1 ) c = 1.127;
+            else if( fabs(jet->eta()) < 1.7 ) c = 1.150;
+            else if( fabs(jet->eta()) < 2.3 ) c = 1.254;
+            else if( fabs(jet->eta()) < 2.8 ) c = 1.316;
+            else if( fabs(jet->eta()) < 3.2 ) c = 1.458;
+            else if( fabs(jet->eta()) < 5.0 ) c = 1.247;
+         }
+
+         // get the smeared pt by scaling the RECO-GEN pt difference
+         const reco::GenJet *genjet = NULL;
+         double spt = jet->pt();
+         if(jet->genJet()){
+            genjet = jet->genJet();
+            spt = std::max(0.0, genjet->pt() + c*(jet->pt()-genjet->pt()));
+         }
+         double dpt = spt - jet->pt();
+
+         // smear MET
+         met_dx[i] -= dpt/sqrt(2);
+         met_dy[i] -= dpt/sqrt(2);
+
+         if( jet->pt() == jet1.Pt() and jet->phi() == jet1.Phi() ) jet1_dpt[i] = dpt;
+         if( jet->pt() == jet2.Pt() and jet->phi() == jet2.Phi() ) jet2_dpt[i] = dpt;
+
+      }
+   }
+
+   return;
+}
+
+   void
+MakeNtuple::smearJetsMET(
+      const TLorentzVector jet1uns, const TLorentzVector jet2uns, const TLorentzVector metuns,
+      TLorentzVector& jet1, TLorentzVector& jet2, TLorentzVector &met,
+      double jet1_dpt, double jet2_dpt, double met_dx, double met_dy
+      ){
+
+   // TODO
+   jet1_dpt = 0;
+   jet2_dpt = 0;
+   met_dx = 0;
+   met_dy = 0;
+
+   jet1.SetPx( jet1uns.Px()+(jet1_dpt/sqrt(2)) );
+   jet1.SetPy( jet1uns.Py()+(jet1_dpt/sqrt(2)) );
+
+   jet2.SetPx( jet2uns.Px()+(jet2_dpt/sqrt(2)) );
+   jet2.SetPy( jet2uns.Py()+(jet2_dpt/sqrt(2)) );
+
+   met.SetPx( metuns.Px()+met_dx );
+   met.SetPy( metuns.Py()+met_dy );
+
+   return;
+}
+
+   void
+MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector met,
+      const TLorentzVector jet1, const TLorentzVector jet2,
       const TLorentzVector lep1, const TLorentzVector lep2)
 {
    // Instantiate uncertainty sources
-   std::vector<JetCorrectionUncertainty*> vsrc(systnames.size());
+   std::vector<JetCorrectionUncertainty*> vsrc(jsystnames.size());
    std::string sgn [2] = {"DN","UP"};
 
-   for (unsigned int isrc = 0; isrc < systnames.size(); isrc++) {
+   // jet energy scale
+   for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
 
-      const char *name = systnames[isrc].c_str();
+      const char *name = jsystnames[isrc].c_str();
       JetCorrectorParameters *p = new JetCorrectorParameters("data/Summer13_V5_DATA_UncertaintySources_AK5PFchs.txt", name);
       JetCorrectionUncertainty *unc = new JetCorrectionUncertainty(*p);
       vsrc[isrc] = unc;
@@ -808,21 +1003,38 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
          lep2syst[name+sgn[i]] = lep2;
       }
 
-      //delete p;
-      //delete unc;
-      
    } // for isrc
+
+   // other systematics
+   for (unsigned int i = 0; i < systnames.size(); i++) {
+      const char *name = systnames[i].c_str();
+      for(int i=0; i < 2; i++){
+         metsyst[name+sgn[i]] = met;
+         jet1syst[name+sgn[i]] = jet1;
+         jet2syst[name+sgn[i]] = jet2;
+         lep1syst[name+sgn[i]] = lep1;
+         lep2syst[name+sgn[i]] = lep2;
+      }
+   }
 
    edm::Handle<edm::View<pat::Jet> > jets;
    iEvent.getByLabel(jetTag_,jets);
 
-   // loop over uncertainty sources
-   for (unsigned int isrc = 0; isrc < systnames.size(); isrc++) {
+   // calculate unclustered energy contribution to the met
+   TLorentzVector met_uncl = met + lep1 + lep2;
+   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+      TLorentzVector jetFourVector;
+      jetFourVector.SetPxPyPzE(jet->px(), jet->py(), jet->pz(), jet->energy());
+      met_uncl += jetFourVector;
+   }
+
+   // loop over jes uncertainty sources
+   for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
       JetCorrectionUncertainty *unc = vsrc[isrc];
 
       // up and down variations
       for(int i=0; i < 2; i++){
-         std::string name = systnames[isrc]+sgn[i];
+         std::string name = jsystnames[isrc]+sgn[i];
 
          // loop over all jets
          for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
@@ -854,6 +1066,43 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
       } // up and down
    } // for isrc
 
+   // loop over other systematics
+   for(unsigned int isrc = 0; isrc < systnames.size(); isrc++){
+      for(int i=0; i < 2; i++){
+         std::string name = systnames[isrc]+sgn[i];
+         int s = 2*i-1;
+
+         if( name.find("MuonMomentumScale") != std::string::npos ){
+            if( abs(PDG1) == 13 ) lep1syst[name] *= 1.000+s*0.002;
+            if( abs(PDG2) == 13 ) lep2syst[name] *= 1.000+s*0.002;
+         }
+         if( name.find("ElectronEnergyScale") != std::string::npos ){
+            double unc1=0, unc2=0;
+            if( fabs(lep1syst[name].Eta()) < 1.48 ) unc1 = 0.006;
+            else unc1 = 0.015;
+            if( fabs(lep2syst[name].Eta()) < 1.48 ) unc2 = 0.006;
+            else unc2 = 0.015;
+            if( abs(PDG1) == 11 ) lep1syst[name] *= 1.000+s*unc1;
+            if( abs(PDG2) == 11 ) lep2syst[name] *= 1.000+s*unc2;
+         }
+
+         // propagate lepton uncertainties to MET
+         if( name.find("MuonMomentumScale") != std::string::npos
+               or name.find("ElectronEnergyScale") != std::string::npos ){
+            metsyst[name] -= lep1syst[name] - lep1;
+            metsyst[name] -= lep2syst[name] - lep2;
+         }
+
+         // unclustered energy uncertainty
+         if( name.find("METUnclustered") != std::string::npos ){
+            metsyst[name] += s*0.1*met_uncl;
+         }
+
+      }
+
+   }
+
+
    return;
 }
 
@@ -871,6 +1120,8 @@ MakeNtuple::beginJob()
       PU2012_Data.push_back( PU2012_Dataf[i] );
    }
    LumiWeights_ = edm::LumiReWeighting( PU2012_MC, PU2012_Data);
+   PShiftDown_ = reweight::PoissonMeanShifter(-0.05);
+   PShiftUp_ = reweight::PoissonMeanShifter(0.05);
 
 
    file = new TFile(outFileName_.c_str(), "RECREATE");
@@ -950,14 +1201,33 @@ MakeNtuple::beginJob()
    trees["Central"]->Branch("lumi", &(this_event_id.lumi));
    trees["Central"]->Branch("event", &(this_event_id.event));
 
-   systnames.push_back("CorrelationGroupMPFInSitu");
-   systnames.push_back("CorrelationGroupFlavor");
-   systnames.push_back("CorrelationGroupIntercalibration");
-   systnames.push_back("CorrelationGroupUncorrelated");
-   systnames.push_back("CorrelationGroupbJES");
-   systnames.push_back("Total");
+   systnames.push_back("JetEnergyResolution");
+   systnames.push_back("METUnclustered");
+   systnames.push_back("PileUp");
+   systnames.push_back("ElectronEnergyScale");
+   systnames.push_back("MuonMomentumScale");
+   systnames.push_back("ElectronId");
+   systnames.push_back("MuonId");
+   systnames.push_back("BTaggingEff");
+   systnames.push_back("PDF");
+   systnames.push_back("PtTopReweighting");
+
+   jsystnames.push_back("CorrelationGroupMPFInSitu");
+   jsystnames.push_back("CorrelationGroupFlavor");
+   jsystnames.push_back("CorrelationGroupIntercalibration");
+   jsystnames.push_back("CorrelationGroupUncorrelated");
+   jsystnames.push_back("CorrelationGroupbJES");
+   jsystnames.push_back("Total");
 
    std::string sgn [2] = {"DN","UP"};
+   for(std::vector<std::string>::iterator syst = jsystnames.begin(); syst != jsystnames.end(); syst++){
+      for(int i=0; i < 2; i++){
+         std::string name = *syst+sgn[i];
+         trees[name] = trees["Central"]->CloneTree(0);
+         trees[name]->SetName(name.c_str());
+         trees[name]->SetTitle(name.c_str());
+      }
+   }
    for(std::vector<std::string>::iterator syst = systnames.begin(); syst != systnames.end(); syst++){
       for(int i=0; i < 2; i++){
          std::string name = *syst+sgn[i];
