@@ -811,21 +811,23 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          jet1_dpt[1], jet2_dpt[1], met_dx[1], met_dy[1] ); 
    pass_selection = passOfflineSelection( metFourVector,
          jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
+   if( pass_selection ) trees["JetEnergyResolutionUP"]->Fill();
 
    smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
          jet1FourVector, jet2FourVector, metFourVector,
          jet1_dpt[2], jet2_dpt[2], met_dx[2], met_dy[2] ); 
    pass_selection = passOfflineSelection( metFourVector,
          jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["JetEnergyResolutionUP"]->Fill();
+   if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
 
    //
    // fill trees for systematics samples
    //
+   double weight_temp = MyWeight;
    for( std::map<std::string, TLorentzVector>::iterator syst = metsyst.begin(); syst != metsyst.end(); syst++ ){
-
       std::string name = syst->first;
+
+      MyWeight  = weight_temp;
 
       // get syst varied quantities
       metFourVector = metsyst[name];
@@ -900,7 +902,7 @@ MakeNtuple::getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
       double *jet1_dpt, double *jet2_dpt, double *met_dx, double *met_dy ){
 
    for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
-      for(int i=0; i < 2; i++){
+      for(int i=0; i < 3; i++){
          
          // get 8 TeV scale factors from
          // https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
@@ -938,7 +940,7 @@ MakeNtuple::getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
             genjet = jet->genJet();
             spt = std::max(0.0, genjet->pt() + c*(jet->pt()-genjet->pt()));
          }
-         double dpt = spt - jet->pt();
+         double dpt = (jet->pt() > 10) ? (spt - jet->pt()) : 0.0;
 
          // smear MET
          met_dx[i] -= dpt/sqrt(2);
@@ -959,12 +961,6 @@ MakeNtuple::smearJetsMET(
       TLorentzVector& jet1, TLorentzVector& jet2, TLorentzVector &met,
       double jet1_dpt, double jet2_dpt, double met_dx, double met_dy
       ){
-
-   // TODO
-   jet1_dpt = 0;
-   jet2_dpt = 0;
-   met_dx = 0;
-   met_dy = 0;
 
    jet1.SetPx( jet1uns.Px()+(jet1_dpt/sqrt(2)) );
    jet1.SetPy( jet1uns.Py()+(jet1_dpt/sqrt(2)) );
