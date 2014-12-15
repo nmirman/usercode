@@ -126,11 +126,11 @@ class MakeNtuple : public edm::EDAnalyzer {
                const TLorentzVector lep1, const TLorentzVector lep2 );
       void getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
             const TLorentzVector jet1, const TLorentzVector jet2,
-            double *jet1_dpt, double *jet2_dpt, double *met_dx, double *met_dy );
+            double *jet1_rE, double *jet2_rE, double *met_dx, double *met_dy, double *met_dz, double *met_dE );
       void smearJetsMET(
             const TLorentzVector jet1uns, const TLorentzVector jet2uns, const TLorentzVector metuns,
             TLorentzVector& jet1, TLorentzVector& jet2, TLorentzVector& met,
-            double jet1_pt, double jet2_pt, double met_dx, double met_dy );
+            double jet1_pt, double jet2_pt, double met_dx, double met_dy, double met_dz, double met_dE );
       void calculateSystematics( const edm::Event&, const TLorentzVector met, const TLorentzVector jet1, const TLorentzVector jet2,
             const TLorentzVector lep1, const TLorentzVector lep2);
 
@@ -570,10 +570,6 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          n = (Wp->daughter(0));
       }
       else {
-         //std::cout << "Wp\n";
-         //std::cout << Wp->daughter(1)->pdgId() << std::endl;
-         //std::cout << Wp->daughter(0)->pdgId() << std::endl;
-         //return; // not a dilepton event
          lp = (Wp->daughter(1));
          n = (Wp->daughter(0));
       }
@@ -586,10 +582,6 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          nb = (Wm->daughter(0));
       }
       else {
-         //std::cout << "Wm\n";
-         //std::cout << Wm->daughter(1)->pdgId() << std::endl;
-         //std::cout << Wm->daughter(0)->pdgId() << std::endl;
-         //return; // not a dilepton event
          lm = (Wm->daughter(1));
          nb = (Wm->daughter(0));
       }
@@ -723,59 +715,6 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       generatedMetFourVector.SetPxPyPzE(pmet.genMET()->px(), pmet.genMET()->py(), pmet.genMET()->pz(), pmet.genMET()->energy());
    }
 
-   /*
-   if( runOnMC_ ){
-      TRandom3* rand = new TRandom3(randSeed_+10E6);
-      for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
-         for(int i=0; i < 3; i++){
-            double ptres = jet->pt()*ptResol_->resolutionEtaPt(jet->eta(),jet->pt())->GetParameter(2);
-
-            // get 8 TeV scale factors from
-            // https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
-            double c = 1.0;
-            if( i==0 ){ // central
-               if( fabs(jet->eta()) < 0.5 ) c = 1.079;
-               else if( fabs(jet->eta()) < 1.1 ) c = 1.099;
-               else if( fabs(jet->eta()) < 1.7 ) c = 1.121;
-               else if( fabs(jet->eta()) < 2.3 ) c = 1.208;
-               else if( fabs(jet->eta()) < 2.8 ) c = 1.254;
-               else if( fabs(jet->eta()) < 3.2 ) c = 1.395;
-               else if( fabs(jet->eta()) < 5.0 ) c = 1.056;
-            }else if( i==1 ){ // up
-               if( fabs(jet->eta()) < 0.5 ) c = 1.053;
-               else if( fabs(jet->eta()) < 1.1 ) c = 1.071;
-               else if( fabs(jet->eta()) < 1.7 ) c = 1.192;
-               else if( fabs(jet->eta()) < 2.3 ) c = 1.162;
-               else if( fabs(jet->eta()) < 2.8 ) c = 1.192;
-               else if( fabs(jet->eta()) < 3.2 ) c = 1.332;
-               else if( fabs(jet->eta()) < 5.0 ) c = 0.865;
-            }else if( i==2 ){ // down
-               if( fabs(jet->eta()) < 0.5 ) c = 1.105;
-               else if( fabs(jet->eta()) < 1.1 ) c = 1.127;
-               else if( fabs(jet->eta()) < 1.7 ) c = 1.150;
-               else if( fabs(jet->eta()) < 2.3 ) c = 1.254;
-               else if( fabs(jet->eta()) < 2.8 ) c = 1.316;
-               else if( fabs(jet->eta()) < 3.2 ) c = 1.458;
-               else if( fabs(jet->eta()) < 5.0 ) c = 1.247;
-            }
-
-            double s = 0.0;
-            if( jet->pt() > 10 ){ //smear
-               s = rand->Gaus(0.0,ptres*sqrt(c*c-1));
-               met_dx[i] -= s/sqrt(2);
-               met_dy[i] -= s/sqrt(2);
-               if( jet->pt() == jet1FourVector.Pt() ){
-                  jet1_dpt[i] = s;
-               }
-               if( jet->pt() == jet2FourVector.Pt() ){
-                  jet2_dpt[i] = s;
-               }
-            }
-         }
-      }
-   }
-   */
-
    // save unsmeared jets and met
    TLorentzVector jet1Unsmeared = jet1FourVector;
    TLorentzVector jet2Unsmeared = jet2FourVector;
@@ -786,9 +725,12 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    // with JER systematic variations
    double met_dx [3] = {0};
    double met_dy [3] = {0};
-   double jet1_dpt [3] = {0};
-   double jet2_dpt [3] = {0};
-   if( runOnMC_ ) getSmearingFactors( jets, jet1FourVector, jet2FourVector, jet1_dpt, jet2_dpt, met_dx, met_dy );
+   double met_dz [3] = {0};
+   double met_dE [3] = {0};
+   double jet1_rE [3] = {1.0, 1.0, 1.0};
+   double jet2_rE [3] = {1.0, 1.0, 1.0};
+   if( runOnMC_ ) getSmearingFactors( jets, jet1FourVector, jet2FourVector, jet1_rE, jet2_rE,
+         met_dx, met_dy, met_dz, met_dE );
 
    // 
    // use original objects to calculate JES systematics (should be accessed with const)
@@ -800,7 +742,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    //
    smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
          jet1FourVector, jet2FourVector, metFourVector,
-         jet1_dpt[0], jet2_dpt[0], met_dx[0], met_dy[0] ); 
+         jet1_rE[0], jet2_rE[0], met_dx[0], met_dy[0], met_dz[0], met_dE[0] ); 
    pass_selection = passOfflineSelection( metFourVector,
          jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
    if( pass_selection ) trees["Central"]->Fill();
@@ -808,14 +750,14 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    // jet energy resolution systematics
    smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
          jet1FourVector, jet2FourVector, metFourVector,
-         jet1_dpt[1], jet2_dpt[1], met_dx[1], met_dy[1] ); 
+         jet1_rE[1], jet2_rE[1], met_dx[1], met_dy[1], met_dz[1], met_dE[1] ); 
    pass_selection = passOfflineSelection( metFourVector,
          jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
    if( pass_selection ) trees["JetEnergyResolutionUP"]->Fill();
 
    smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
          jet1FourVector, jet2FourVector, metFourVector,
-         jet1_dpt[2], jet2_dpt[2], met_dx[2], met_dy[2] ); 
+         jet1_rE[2], jet2_rE[2], met_dx[2], met_dy[2], met_dz[2], met_dE[2] ); 
    pass_selection = passOfflineSelection( metFourVector,
          jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
    if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
@@ -852,7 +794,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       // apply jet smearing
       smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
             jet1FourVector, jet2FourVector, metFourVector,
-            jet1_dpt[0], jet2_dpt[0], met_dx[0], met_dy[0] ); 
+            jet1_rE[0], jet2_rE[0], met_dx[0], met_dy[0], met_dz[0], met_dE[0] ); 
 
       // fill syst tree
       pass_selection = passOfflineSelection( metFourVector,
@@ -899,7 +841,7 @@ MakeNtuple::passOfflineSelection( const TLorentzVector met,
    void
 MakeNtuple::getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
       const TLorentzVector jet1, const TLorentzVector jet2,
-      double *jet1_dpt, double *jet2_dpt, double *met_dx, double *met_dy ){
+      double *jet1_rE, double *jet2_rE, double *met_dx, double *met_dy, double *met_dz, double *met_dE ){
 
    for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
       for(int i=0; i < 3; i++){
@@ -935,19 +877,22 @@ MakeNtuple::getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
 
          // get the smeared pt by scaling the RECO-GEN pt difference
          const reco::GenJet *genjet = NULL;
-         double spt = jet->pt();
+         double smearedJetE = jet->energy();
          if(jet->genJet()){
             genjet = jet->genJet();
-            spt = std::max(0.0, genjet->pt() + c*(jet->pt()-genjet->pt()));
+            double dE = jet->energy() - genjet->energy();
+            smearedJetE = genjet->energy() + c*dE;
          }
-         double dpt = (jet->pt() > 10) ? (spt - jet->pt()) : 0.0;
+         double rE = (jet->pt() > 10) ? (smearedJetE / jet->energy()) : 1.0;
 
          // smear MET
-         met_dx[i] -= dpt/sqrt(2);
-         met_dy[i] -= dpt/sqrt(2);
+         met_dx[i] -= (rE-1)*jet->px();
+         met_dy[i] -= (rE-1)*jet->py();
+         met_dz[i] -= (rE-1)*jet->pz();
+         met_dE[i] -= (rE-1)*jet->energy();
 
-         if( jet->pt() == jet1.Pt() and jet->phi() == jet1.Phi() ) jet1_dpt[i] = dpt;
-         if( jet->pt() == jet2.Pt() and jet->phi() == jet2.Phi() ) jet2_dpt[i] = dpt;
+         if( jet->pt() == jet1.Pt() and jet->phi() == jet1.Phi() ) jet1_rE[i] = rE;
+         if( jet->pt() == jet2.Pt() and jet->phi() == jet2.Phi() ) jet2_rE[i] = rE;
 
       }
    }
@@ -959,17 +904,16 @@ MakeNtuple::getSmearingFactors( const edm::Handle<edm::View<pat::Jet> >& jets,
 MakeNtuple::smearJetsMET(
       const TLorentzVector jet1uns, const TLorentzVector jet2uns, const TLorentzVector metuns,
       TLorentzVector& jet1, TLorentzVector& jet2, TLorentzVector &met,
-      double jet1_dpt, double jet2_dpt, double met_dx, double met_dy
+      double jet1_rE, double jet2_rE, double met_dx, double met_dy, double met_dz, double met_dE
       ){
 
-   jet1.SetPx( jet1uns.Px()+(jet1_dpt/sqrt(2)) );
-   jet1.SetPy( jet1uns.Py()+(jet1_dpt/sqrt(2)) );
-
-   jet2.SetPx( jet2uns.Px()+(jet2_dpt/sqrt(2)) );
-   jet2.SetPy( jet2uns.Py()+(jet2_dpt/sqrt(2)) );
+   jet1 *= jet1_rE;
+   jet2 *= jet2_rE;
 
    met.SetPx( metuns.Px()+met_dx );
    met.SetPy( metuns.Py()+met_dy );
+   met.SetPz( metuns.Pz()+met_dz );
+   met.SetE( metuns.E()+met_dE );
 
    return;
 }
