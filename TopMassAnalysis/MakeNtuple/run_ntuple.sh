@@ -1,7 +1,9 @@
 #! /bin/bash
 
-xrd='root://osg-se.cac.cornell.edu//xrootd/path/cms/store/user/nmirman/Ntuples/TopMassSkim/20141030'
-skimdir='/mnt/xrootd/user/nmirman/Ntuples/TopMassSkim/20141030'
+date='20150211'
+#date='20141030'
+xrd='root://osg-se.cac.cornell.edu//xrootd/path/cms/store/user/nmirman/Ntuples/TopMassSkim/'$date
+skimdir='/mnt/xrootd/user/nmirman/Ntuples/TopMassSkim/'$date
 
 export WORKING_DIR=temp
 cwd=$(pwd)
@@ -15,6 +17,12 @@ do
    #   let count=count+1
    #   continue
    #fi
+   #if [[ $sample == *"TTJets"* ]]
+   if [[ $sample != "TTJets_FullLeptMGDecays_TuneP11" ]]
+   then
+      let count=count+1
+      continue
+   fi
 
    echo 'Submitting '$sample'...'
    filename=filelist_$sample.txt
@@ -45,7 +53,7 @@ do
       fi
    fi
 
-   for i in {0..9}
+   for i in {0..19}
    do
       numevts=10000
       skip=$(($i*$numevts))

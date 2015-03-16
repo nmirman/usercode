@@ -53,11 +53,14 @@ Implementation:
 #include "JetMETCorrections/Objects/interface/JetCorrectionsRecord.h"
 #include "CondFormats/JetMETObjects/interface/JetCorrectorParameters.h"
 
+#include "LHAPDF/LHAPDF.h"
+
 #include "TLorentzVector.h"
 #include "TMatrix.h"
 #include "TTree.h"
 #include "TFile.h"
 #include "TRandom3.h"
+#include "TGraph.h"
 
 #include <string>
 
@@ -156,11 +159,14 @@ class MakeNtuple : public edm::EDAnalyzer {
       std::vector<pat::Jet> taggedJets_;
       std::vector<pat::Jet> negTaggedJets_;
       std::vector<const reco::RecoCandidate*> goodLeptons_;
+      std::vector<const reco::RecoCandidate*> goodMuons_;
+      std::vector<const reco::RecoCandidate*> goodElectrons_;
 
       // This will be a pointer to the tree we want to use for this event
       std::map<std::string, TTree*> trees;
       TTree *tree;
       TFile *file;
+      TFile *fmueff;
 
       JetResolution *ptResol_;
       JetResolution *phiResol_;
@@ -189,12 +195,18 @@ class MakeNtuple : public edm::EDAnalyzer {
       double jet1Vz, jet2Vz;
       double jet1bdisc, jet2bdisc;
 
+      int nmuons, nelectrons;
+
       static const double PU2012_MCf[60];
       static const double PU2012_Dataf[60];
       edm::LumiReWeighting LumiWeights_;
       reweight::PoissonMeanShifter PShiftUp_;
       reweight::PoissonMeanShifter PShiftDown_;
-      float MyWeight;
+      float weight_pu;
+      float weight_toppt;
+      float weight_btag;
+      float weight_mu;
+      float weight_elec;
       float TotalWeight_plus;
       float TotalWeight_minus;
       float T_nvertices;
@@ -206,6 +218,15 @@ class MakeNtuple : public edm::EDAnalyzer {
       float geninfo_eff;
       float geninfo_alphaQCD;
       float geninfo_alphaQED;
+
+      float geninfo_scalePDF;
+      float geninfo_id1;
+      float geninfo_id2; 
+      float geninfo_x1;
+      float geninfo_x2; 
+      float geninfo_xPDF1;  
+      float geninfo_xPDF2;
+      std::vector<float> pdf_weights;
 
       std::vector<std::string> systnames;
       std::vector<std::string> jsystnames;
@@ -419,6 +440,27 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    taggedJets_.clear();
    negTaggedJets_.clear();
    goodLeptons_.clear();
+   goodMuons_.clear();
+   goodElectrons_.clear();
+
+   weight_pu=1;
+   weight_toppt=1;
+   weight_btag=1;
+   weight_mu=1;
+   weight_elec=1;
+
+   // pdfs
+   /*
+   if( runOnMC_ ){
+
+      edm::Handle<reco::PdfInfo> pdfs;
+      iEvent.getByType( pdfstuff );
+      cout << pdfs->id1 << " " << pdfstuff->x1 << endl;
+      cout << pdfs->id2 << " " << pdfstuff->x2 << endl;
+      cout << pdfs->scalePDF << endl;
+
+   }
+   */
 
    // pile up reweighting
    if( runOnMC_ ){
@@ -439,6 +481,53 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       geninfo_alphaQCD = gi->alphaQCD();
       geninfo_alphaQED = gi->alphaQED();
 
+      geninfo_scalePDF = 0;
+      geninfo_id1 = 0;
+      geninfo_id2 = 0; 
+      geninfo_x1 = 0;
+      geninfo_x2 = 0; 
+      geninfo_xPDF1 = 0;  
+      geninfo_xPDF2 = 0;
+
+      pdf_weights.clear();
+
+      if(gi->hasPDF()){
+         geninfo_scalePDF = gi->pdf()->scalePDF;
+         geninfo_id1        = gi->pdf()->id.first;
+         geninfo_id2        = gi->pdf()->id.second;
+         geninfo_x1      = gi->pdf()->x.first;
+         geninfo_x2      = gi->pdf()->x.second;
+         geninfo_xPDF1    = gi->pdf()->xPDF.first;
+         geninfo_xPDF2    = gi->pdf()->xPDF.second;
+
+         LHAPDF::usePDFMember(1,0);
+         double xpdf1 = LHAPDF::xfx(1, geninfo_x1, geninfo_scalePDF, geninfo_id1);
+         double xpdf2 = LHAPDF::xfx(1, geninfo_x2, geninfo_scalePDF, geninfo_id2);
+         double w0 = xpdf1 * xpdf2;
+         for(int i=1; i <=50; ++i){
+            LHAPDF::usePDFMember(1,i);
+            double xpdf1_new = LHAPDF::xfx(1, geninfo_x1, geninfo_scalePDF, geninfo_id1);
+            double xpdf2_new = LHAPDF::xfx(1, geninfo_x2, geninfo_scalePDF, geninfo_id2);
+            double weight = xpdf1_new * xpdf2_new / w0;
+            pdf_weights.push_back(weight);
+         }
+
+      }
+
+      /*
+      edm::InputTag pdfWeightTag("pdfWeights:cteq66");
+      edm::Handle<std::vector<double> > weightHandle;
+      iEvent.getByLabel(pdfWeightTag, weightHandle);
+
+      std::vector<double> weights = (*weightHandle);
+      std::cout << "Event weight for central PDF:" << weights[0] << std::endl;
+      unsigned int nmembers = weights.size();
+      for (unsigned int j=1; j<nmembers; j+=2) {
+         std::cout << "Event weight for PDF variation +" << (j+1)/2 << ": " << weights[j] << std::endl;
+         std::cout << "Event weight for PDF variation -" << (j+1)/2 << ": " << weights[j+1] << std::endl;
+      }
+      */
+
       std::vector<PileupSummaryInfo>::const_iterator PVI;
       edm::Handle<std::vector<PileupSummaryInfo> > PupInfo;
       iEvent.getByLabel("addPileupInfo", PupInfo);
@@ -453,11 +542,11 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
             continue;
          }
 
-         MyWeight = LumiWeights_.weight( Tnvtx );
+         weight_pu = LumiWeights_.weight( Tnvtx );
          T_nvertices = Tnvtx;
 
-         TotalWeight_plus = MyWeight*PShiftUp_.ShiftWeight( Tnvtx );
-         TotalWeight_minus = MyWeight*PShiftDown_.ShiftWeight( Tnvtx );
+         TotalWeight_plus = weight_pu*PShiftUp_.ShiftWeight( Tnvtx );
+         TotalWeight_minus = weight_pu*PShiftDown_.ShiftWeight( Tnvtx );
       }
 
    }
@@ -633,20 +722,34 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    // Now get leptons
    edm::Handle<edm::View<pat::Electron> > electrons;
    iEvent.getByLabel(electronTag_, electrons);
+   int countmu=0, counte=0;
    for( edm::View<pat::Electron>::const_iterator electron = electrons->begin(); electron != electrons->end(); ++electron) {
       const reco::RecoCandidate* lepton = &*electron;
       goodLeptons_.push_back(lepton);
+      goodElectrons_.push_back(lepton);
+      counte++;
    }
    edm::Handle<edm::View<pat::Muon> > muons;
    iEvent.getByLabel(muonTag_, muons);
    for( edm::View<pat::Muon>::const_iterator muon = muons->begin(); muon != muons->end(); ++muon) {
       const reco::RecoCandidate* lepton = &*muon;
       goodLeptons_.push_back(lepton);
+      goodMuons_.push_back(lepton);
+      countmu++;
    }
 
    if (goodLeptons_.size() < 2) return;
+   if (goodLeptons_.size() > 2){
+      std::cout << "ERROR: MORE THAN 2 LEPTONS: ";
+      for(unsigned int i=0; i < goodLeptons_.size(); i++) std::cout << goodLeptons_[i]->pt() << " ";
+      std::cout << std::endl;
+      return;
+   }
    const reco::RecoCandidate* lep1 = goodLeptons_[0];
    const reco::RecoCandidate* lep2 = goodLeptons_[1];
+
+   nmuons = goodMuons_.size();
+   nelectrons = goodElectrons_.size();
 
    // get met
    edm::Handle<edm::View<reco::PFMET> > mets;
@@ -673,7 +776,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    // jet energy scale uncertainty
    //std::string path = std::getenv("CMSSW_BASE");
-   JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( "data/Summer13_V5_DATA_Uncertainty_AK5PFchs.txt" );
+   JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( "data/Winter14_V8_DATA_Uncertainty_AK5PFchs.txt" );
    double factor = 1;
    double corr = 0;
    jecUnc->setJetEta(jet1.eta());
@@ -762,14 +865,62 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
    if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
 
+
+   // for b tagging efficiency weight
+   double weight_bjets [] = {-1,-1};
+   weight_bjets[0] = 0.997942*((1.+(0.00923753*jet1FourVector.Pt()))/(1.+(0.0096119*jet1FourVector.Pt())));
+   weight_bjets[1] = 0.997942*((1.+(0.00923753*jet2FourVector.Pt()))/(1.+(0.0096119*jet2FourVector.Pt())));
+
+   // muon scale factors
+   TGraph *gmueff = (TGraph*)fmueff->Get("DATA_over_MC_Loose_eta_pt20-500");
+   double weight_muons [] = {-1,-1};
+   for(unsigned int i=0; i < goodMuons_.size(); i++){
+      for(int n=0; n < gmueff->GetN(); n++){
+         double x, y;
+         gmueff->GetPoint(n,x,y);
+         double low_edge = x - gmueff->GetErrorX(n);
+         double high_edge = x + gmueff->GetErrorX(n);
+         if( goodMuons_[i]->eta() >= low_edge and goodMuons_[i]->eta() < high_edge ) weight_muons[i] = y;
+      }
+   }
+
+   // electron scale factors
+   double elec_factors [3][4] = {
+      {0.904, 0.977, 0.978, 0.968},
+      {0.980, 0.979, 0.980, 0.964},
+      {0.933, 0.963, 0.976, 0.975}
+   };
+   double elec_factors_errUP [3][4] = {
+      {0.005, 0.001, 0.001, 0.001},
+      {0.010, 0.003, 0.000, 0.001},
+      {0.121, 0.144, 0.001, 0.001}
+   };
+   double elec_factors_errDN [3][4] = {
+      {0.005, 0.001, 0.001, 0.001},
+      {0.008, 0.003, 0.000, 0.001},
+      {0.129, 0.144, 0.001, 0.002}
+   };
+   double elec_etamin [] = {0.00, 0.80, 1.48};
+   double elec_etamax [] = {0.80, 1.48, 2.50};
+   double elec_ptmin [] = {20, 30, 40, 50};
+   double elec_ptmax [] = {30, 40, 50, 150};
+
    //
    // fill trees for systematics samples
    //
-   double weight_temp = MyWeight;
+   double weight_pu_temp = weight_pu;
+   double weight_toppt_temp = weight_toppt;
+   double weight_btag_temp = weight_btag;
+   double weight_mu_temp = weight_mu;
+   double weight_elec_temp = weight_elec;
    for( std::map<std::string, TLorentzVector>::iterator syst = metsyst.begin(); syst != metsyst.end(); syst++ ){
       std::string name = syst->first;
 
-      MyWeight  = weight_temp;
+      weight_pu  = weight_pu_temp;
+      weight_toppt = weight_toppt_temp;
+      weight_btag = weight_btag_temp;
+      weight_mu = weight_mu_temp;
+      weight_elec = weight_elec_temp;
 
       // get syst varied quantities
       metFourVector = metsyst[name];
@@ -783,13 +934,69 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       metUnsmeared = metFourVector;
 
       // pile up systematic
-      if( name == "PileUpUP" ) MyWeight = TotalWeight_plus;
-      if( name == "PileUpDN" ) MyWeight = TotalWeight_minus;
+      if( name == "PileUpUP" ) weight_pu = TotalWeight_plus;
+      if( name == "PileUpDN" ) weight_pu = TotalWeight_minus;
 
       // top pt reweighting
       double a = 0.148;
       double b = -0.00129;
-      if( name.find("PtTopReweighting") != std::string::npos ) MyWeight *= sqrt( exp(a+b*t_pt)*exp(a+b*tb_pt) );
+      if( name.find("PtTopReweighting") != std::string::npos ) weight_toppt = sqrt( exp(a+b*t_pt)*exp(a+b*tb_pt) );
+
+      // b tag scale factors
+      // Tagger: CSVL within 20 < pt < 800 GeV, abs(eta) < 2.4, x = pt
+      float ptmin[] = {20, 30, 40, 50, 60, 70, 80, 100, 120, 160, 210, 260, 320, 400, 500, 600};
+      float ptmax[] = {30, 40, 50, 60, 70, 80,100, 120, 160, 210, 260, 320, 400, 500, 600, 800};
+      double SFb_error [] = { 0.033299, 0.0146768, 0.013803, 0.0170145, 0.0166976, 0.0137879, 0.0149072, 0.0153068, 0.0133077, 0.0123737, 0.0157152, 0.0175161, 0.0209241, 0.0278605, 0.0346928, 0.0350099 };
+      int index_jet1 = -1;
+      int index_jet2 = -1;
+      for(int i=0; i < 16; i++){
+         if( jet1FourVector.Pt() >= ptmin[i] and jet1FourVector.Pt() < ptmax[i] ) index_jet1 = i;
+         if( jet2FourVector.Pt() >= ptmin[i] and jet2FourVector.Pt() < ptmax[i] ) index_jet2 = i;
+      }
+      if( name == "BTaggingUP" ){
+         weight_btag = (weight_bjets[0]+SFb_error[index_jet1])*(weight_bjets[1]+SFb_error[index_jet2]);
+      }
+      else if( name == "BTaggingDN" ){
+         weight_btag = (weight_bjets[0]-SFb_error[index_jet1])*(weight_bjets[1]-SFb_error[index_jet2]);
+      }else{
+         weight_btag = weight_bjets[0]*weight_bjets[1];
+      }
+
+      // muon ID scale factors
+      int count_mu = 0;
+      for(int i=0; i < 2; i++){
+         if( weight_muons[i] != -1 ){
+            weight_mu *= weight_muons[i];
+            count_mu++;
+         }
+      }
+      if( name == "MuonIdUP" ) weight_mu *= pow(1.005,count_mu);
+      if( name == "MuonIdDN" ) weight_mu *= pow(0.995,count_mu);
+
+      // electron scale factors
+      for(unsigned int i=0; i < goodElectrons_.size(); i++){
+
+         double eta = goodElectrons_[i]->eta();
+         double pt = goodElectrons_[i]->pt();
+         int ipt=-1, ieta=-1;
+         for(int j=0; j < 3; j++){
+            if( fabs(eta) >= elec_etamin[j] and fabs(eta) < elec_etamax[j] ) ieta = j;
+         }
+         for(int j=0; j < 4; j++){
+            if( pt >= elec_ptmin[j] and pt < elec_ptmax[j] ) ipt = j;
+         }
+         if( ieta != -1 and ipt != -1 ){
+            if( name == "ElectronIdUP" ){
+               weight_elec *= elec_factors[ieta][ipt] + elec_factors_errUP[ieta][ipt];
+            }
+            else if( name == "ElectronIdDN" ){
+               weight_elec *= elec_factors[ieta][ipt] - elec_factors_errDN[ieta][ipt];
+            }else{
+               weight_elec *= elec_factors[ieta][ipt];
+            }
+         }
+
+      }
 
       // apply jet smearing
       smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
@@ -820,22 +1027,23 @@ MakeNtuple::passOfflineSelection( const TLorentzVector met,
 
    // ##### TEMPORARY SOLUTION ##### TODO
    
-   met_pt = 45;
-   jet_pt = 35;
-   mu_pt = 21;
-   e_pt = 21;
+   //met_pt = 45;
+   //jet_pt = 35;
+   //mu_pt = 21;
+   //e_pt = 21;
    
    // ##### TEMPORARY SOLUTION ##### TODO
 
    bool met_ok = (abs(PDG1) != abs(PDG2)) or (met.Pt() > met_pt);
-   bool jet1_ok = jet1.Pt() > jet_pt and jet1.Eta() < jet_eta;
-   bool jet2_ok = jet2.Pt() > jet_pt and jet2.Eta() < jet_eta;
-   bool lep1_ok = abs(PDG1) == 11 ? (lep1.Pt() > e_pt and lep1.Eta() < e_eta)
-                                 : (lep1.Pt() > mu_pt and lep1.Eta() < mu_eta);
-   bool lep2_ok = abs(PDG1) == 11 ? (lep2.Pt() > e_pt and lep2.Eta() < e_eta)
-                                 : (lep2.Pt() > mu_pt and lep2.Eta() < mu_eta);
+   bool jet1_ok = jet1.Pt() > jet_pt and fabs(jet1.Eta()) < jet_eta;
+   bool jet2_ok = jet2.Pt() > jet_pt and fabs(jet2.Eta()) < jet_eta;
+   bool lep1_ok = abs(PDG1) == 11 ? (lep1.Pt() > e_pt and fabs(lep1.Eta()) < e_eta)
+                                 : (lep1.Pt() > mu_pt and fabs(lep1.Eta()) < mu_eta);
+   bool lep2_ok = abs(PDG2) == 11 ? (lep2.Pt() > e_pt and fabs(lep2.Eta()) < e_eta)
+                                 : (lep2.Pt() > mu_pt and fabs(lep2.Eta()) < mu_eta);
+   bool Zpeak_ok = abs(PDG1) != abs(PDG2) or ((lep1+lep2).M() < 60 or (lep1+lep2).M() > 120);
 
-   return (met_ok and jet1_ok and jet2_ok and lep1_ok and lep2_ok);
+   return (met_ok and jet1_ok and jet2_ok and lep1_ok and lep2_ok and Zpeak_ok );
 }
 
    void
@@ -931,7 +1139,7 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
    for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
 
       const char *name = jsystnames[isrc].c_str();
-      JetCorrectorParameters *p = new JetCorrectorParameters("data/Summer13_V5_DATA_UncertaintySources_AK5PFchs.txt", name);
+      JetCorrectorParameters *p = new JetCorrectorParameters("data/Winter14_V8_DATA_UncertaintySources_AK5PFchs.txt", name);
       JetCorrectionUncertainty *unc = new JetCorrectionUncertainty(*p);
       vsrc[isrc] = unc;
 
@@ -943,6 +1151,7 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
          lep2syst[name+sgn[i]] = lep2;
       }
 
+      delete p;
    } // for isrc
 
    // other systematics
@@ -993,6 +1202,21 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
             // back out the correction factor
             double factor = jetUncor.pt() != 0 ? jet->pt() / jetUncor.pt() : 1.0;
 
+            // separate Flavor uncertainties
+            int flavor = jet->partonFlavour();
+            if( jsystnames[isrc] == "FlavorPureGluon" ){
+               if( fabs(flavor) != 21 ) var = 0.0;
+            }
+            if( jsystnames[isrc] == "FlavorPureQuark" ){
+               if( fabs(flavor) != 1 and fabs(flavor) != 2 and fabs(flavor) != 3 ) var = 0.0;
+            }
+            if( jsystnames[isrc] == "FlavorPureCharm" ){
+               if( fabs(flavor) != 4 ) var = 0.0;
+            }
+            if( jsystnames[isrc] == "FlavorPureBottom" ){
+               if( fabs(flavor) != 5 ) var = 0.0;
+            }
+
             bool isJet1 = jetFourVector.Pt() == jet1syst[name].Pt();
             bool isJet2 = jetFourVector.Pt() == jet2syst[name].Pt();
 
@@ -1042,6 +1266,10 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
 
    }
 
+   // clean up
+   for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
+      delete vsrc[isrc];
+   }
 
    return;
 }
@@ -1050,6 +1278,10 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
    void 
 MakeNtuple::beginJob()
 {
+
+   // pdfs
+   //LHAPDF::initPDFSet(1, "ct10nnlo.LHgrid");
+   LHAPDF::initPDFSet(1, "CT10.LHgrid");
 
    // pile up reweighting
    std::vector< float > PU2012_MC;
@@ -1063,6 +1295,8 @@ MakeNtuple::beginJob()
    PShiftDown_ = reweight::PoissonMeanShifter(-0.05);
    PShiftUp_ = reweight::PoissonMeanShifter(0.05);
 
+   // muon scale factors
+   fmueff = new TFile("data/MuonEfficiencies_Run2012ReReco_53X.root");
 
    file = new TFile(outFileName_.c_str(), "RECREATE");
    file->cd();
@@ -1106,9 +1340,26 @@ MakeNtuple::beginJob()
    trees["Central"]->Branch("jet1bdisc",&jet1bdisc);
    trees["Central"]->Branch("jet2bdisc",&jet2bdisc);
 
+   trees["Central"]->Branch("nmuons", &nmuons);
+   trees["Central"]->Branch("nelectrons", &nelectrons);
+
    if (runOnMC_) {
-      trees["Central"]->Branch("puMyWeight", &MyWeight);
       trees["Central"]->Branch("puTnvtx", &T_nvertices);
+      trees["Central"]->Branch("weight_pu", &weight_pu);
+      trees["Central"]->Branch("weight_toppt", &weight_toppt);
+      trees["Central"]->Branch("weight_btag", &weight_btag);
+      trees["Central"]->Branch("weight_mu", &weight_mu);
+      trees["Central"]->Branch("weight_elec", &weight_elec);
+
+      trees["Central"]->Branch("geninfo_scalePDF", &geninfo_scalePDF);
+      trees["Central"]->Branch("geninfo_id1", &geninfo_id1);
+      trees["Central"]->Branch("geninfo_id2", &geninfo_id2); 
+      trees["Central"]->Branch("geninfo_x1", &geninfo_x1);
+      trees["Central"]->Branch("geninfo_x2", &geninfo_x2); 
+      trees["Central"]->Branch("geninfo_xPDF1", &geninfo_xPDF1); 
+      trees["Central"]->Branch("geninfo_xPDF2", &geninfo_xPDF2);
+
+      trees["Central"]->Branch("pdf_weights", &pdf_weights);
    }
    if (runTtbar_) {
       trees["Central"]->Branch("jet1GenId", &jet1GenId);
@@ -1148,7 +1399,7 @@ MakeNtuple::beginJob()
    systnames.push_back("MuonMomentumScale");
    systnames.push_back("ElectronId");
    systnames.push_back("MuonId");
-   systnames.push_back("BTaggingEff");
+   systnames.push_back("BTagging");
    systnames.push_back("PDF");
    systnames.push_back("PtTopReweighting");
 
@@ -1157,6 +1408,16 @@ MakeNtuple::beginJob()
    jsystnames.push_back("CorrelationGroupIntercalibration");
    jsystnames.push_back("CorrelationGroupUncorrelated");
    jsystnames.push_back("CorrelationGroupbJES");
+
+   jsystnames.push_back("AbsoluteStat");
+   jsystnames.push_back("AbsoluteScale");
+   jsystnames.push_back("AbsoluteMPFBias");
+   jsystnames.push_back("AbsoluteFlavMap");
+   jsystnames.push_back("FlavorPureGluon");
+   jsystnames.push_back("FlavorPureQuark");
+   jsystnames.push_back("FlavorPureCharm");
+   jsystnames.push_back("FlavorPureBottom");
+   jsystnames.push_back("RelativeFSR");
    jsystnames.push_back("Total");
 
    std::string sgn [2] = {"DN","UP"};
@@ -1186,6 +1447,7 @@ MakeNtuple::endJob()
 {
    file->Write();
    file->Close();
+   fmueff->Close();
 }
 
 // ------------ method called when starting to processes a run  ------------

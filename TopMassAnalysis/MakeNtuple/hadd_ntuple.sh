@@ -12,6 +12,6 @@ do
    if [ -e $fileout ]; then
       rm $fileout
    fi
-   hadd $fileout $WORKING_DIR/ntuple_${sample}_?_numEvent10000.root
+   hadd $fileout $WORKING_DIR/ntuple_${sample}_?_numEvent10000.root $WORKING_DIR/ntuple_${sample}_??_numEvent10000.root
 
 done
