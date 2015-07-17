@@ -199,17 +199,23 @@ class MakeNtuple : public edm::EDAnalyzer {
 
       static const double PU2012_MCf[60];
       static const double PU2012_Dataf[60];
+      static const double PU2012_DatafUP[60];
+      static const double PU2012_DatafDN[60];
       edm::LumiReWeighting LumiWeights_;
-      reweight::PoissonMeanShifter PShiftUp_;
-      reweight::PoissonMeanShifter PShiftDown_;
+      edm::LumiReWeighting LumiWeightsUP_;
+      edm::LumiReWeighting LumiWeightsDN_;
       float weight_pu;
+      float weight_pu_UP;
+      float weight_pu_DN;
       float weight_toppt;
       float weight_btag;
       float weight_mu;
       float weight_elec;
-      float TotalWeight_plus;
-      float TotalWeight_minus;
       float T_nvertices;
+      float weight_bjes_nuUP;
+      float weight_bjes_nuDN;
+      float weight_bjes_rbLEP;
+      float weight_bfrag;
 
       int geninfo_pid;
       float geninfo_pthat;
@@ -297,67 +303,199 @@ MakeNtuple::~MakeNtuple()
 
 const double MakeNtuple::PU2012_Dataf[60] = {
    // 'true' distribution for 2012 dataset
-   // obtained with pileupCalc.py (06.26.2013)
-   12260.8,
-   32850.4,
-   92330.3,
-   339464,
-   618478,
-   3.0497e+06,
-   1.77215e+07,
-   5.41421e+07,
-   1.30521e+08,
-   2.58981e+08,
-   4.46344e+08,
-   6.8564e+08,
-   8.81642e+08,
-   9.99085e+08,
-   1.07862e+09,
-   1.13797e+09,
-   1.17211e+09,
-   1.18207e+09,
-   1.17701e+09,
-   1.16108e+09,
-   1.13609e+09,
-   1.10481e+09,
-   1.06807e+09,
-   1.02107e+09,
-   9.55582e+08,
-   8.6706e+08,
-   7.58729e+08,
-   6.38851e+08,
-   5.16436e+08,
-   3.99862e+08,
-   2.96257e+08,
-   2.10055e+08,
-   1.42404e+08,
-   9.20546e+07,
-   5.65387e+07,
-   3.29089e+07,
-   1.815e+07,
-   9.51188e+06,
-   4.76417e+06,
-   2.29967e+06,
-   1.08138e+06,
-   501998,
-   233744,
-   111112,
-   54826,
-   28402.3,
-   15490.1,
-   8845.44,
-   5236.34,
-   3180.14,
-   1964.06,
-   1225.15,
-   767.779,
-   481.279,
-   300.644,
-   186.558,
-   114.687,
-   69.6938,
-   41.7929,
-   24.6979
+   // obtained with pileupCalc.py (03.17.2015)
+   12238.5,
+   32499.7,
+   92004.3,
+   336891,
+   615848,
+   2.99224e+06,
+   1.74697e+07,
+   5.34979e+07,
+   1.29072e+08,
+   2.56502e+08,
+   4.42325e+08,
+   6.80775e+08,
+   8.77629e+08,
+   9.95861e+08,
+   1.07561e+09,
+   1.13527e+09,
+   1.16992e+09,
+   1.18034e+09,
+   1.1756e+09,
+   1.15999e+09,
+   1.13529e+09,
+   1.10426e+09,
+   1.06784e+09,
+   1.02145e+09,
+   9.56904e+08,
+   8.69452e+08,
+   7.62038e+08,
+   6.4278e+08,
+   5.20651e+08,
+   4.04012e+08,
+   3.00029e+08,
+   2.13254e+08,
+   1.44959e+08,
+   9.39843e+07,
+   5.79133e+07,
+   3.38274e+07,
+   1.87238e+07,
+   9.84719e+06,
+   4.94827e+06,
+   2.39536e+06,
+   1.12892e+06,
+   524821,
+   244475,
+   116129,
+   57201.2,
+   29562.3,
+   16083.7,
+   9165.98,
+   5418.61,
+   3288.31,
+   2030.33,
+   1266.68,
+   794.193,
+   498.231,
+   311.566,
+   193.591,
+   119.194,
+   72.5585,
+   43.5935,
+   25.8146,
+};
+
+const double MakeNtuple::PU2012_DatafUP[60] = {
+   // 'true' distribution for 2012 dataset
+   // obtained with pileupCalc.py (03.17.2015)
+   // luminosity increased by 5%
+   11510.3,
+   22652.3,
+   82217.2,
+   259033,
+   549655,
+   1.5763e+06,
+   1.04678e+07,
+   3.54953e+07,
+   8.76743e+07,
+   1.83325e+08,
+   3.24051e+08,
+   5.22025e+08,
+   7.34096e+08,
+   8.83328e+08,
+   9.74281e+08,
+   1.04131e+09,
+   1.09053e+09,
+   1.11736e+09,
+   1.12425e+09,
+   1.11893e+09,
+   1.10432e+09,
+   1.08189e+09,
+   1.05396e+09,
+   1.02151e+09,
+   9.81233e+08,
+   9.26384e+08,
+   8.52021e+08,
+   7.5908e+08,
+   6.53504e+08,
+   5.42733e+08,
+   4.33866e+08,
+   3.33348e+08,
+   2.46117e+08,
+   1.74608e+08,
+   1.18866e+08,
+   7.74316e+07,
+   4.81206e+07,
+   2.84783e+07,
+   1.60549e+07,
+   8.64648e+06,
+   4.47159e+06,
+   2.23688e+06,
+   1.09245e+06,
+   526812,
+   254249,
+   124670,
+   63037.7,
+   33241,
+   18366.5,
+   10606.1,
+   6353.01,
+   3911.3,
+   2454.36,
+   1559.17,
+   997.472,
+   639.906,
+   410.197,
+   261.934,
+   166.172,
+   104.5,
+};
+
+const double MakeNtuple::PU2012_DatafDN[60] = {
+   // 'true' distribution for 2012 dataset
+   // obtained with pileupCalc.py (03.17.2015)
+   // luminosity decreased by 5%
+   13063.1,
+   44782.4,
+   108214,
+   432674,
+   770689,
+   5.79686e+06,
+   2.8364e+07,
+   8.15956e+07,
+   1.89599e+08,
+   3.58821e+08,
+   6.02838e+08,
+   8.52318e+08,
+   1.01239e+09,
+   1.11001e+09,
+   1.18219e+09,
+   1.22677e+09,
+   1.24206e+09,
+   1.23825e+09,
+   1.22156e+09,
+   1.19423e+09,
+   1.15955e+09,
+   1.11835e+09,
+   1.06428e+09,
+   9.87551e+08,
+   8.84235e+08,
+   7.60075e+08,
+   6.25723e+08,
+   4.91962e+08,
+   3.68576e+08,
+   2.6303e+08,
+   1.78765e+08,
+   1.15453e+08,
+   7.05755e+07,
+   4.06879e+07,
+   2.20968e+07,
+   1.13309e+07,
+   5.519e+06,
+   2.57704e+06,
+   1.1677e+06,
+   521332,
+   233595,
+   107219,
+   51375.5,
+   26006.1,
+   13923.5,
+   7821.75,
+   4555.09,
+   2718.26,
+   1646.87,
+   1005.84,
+   615.858,
+   376.265,
+   228.484,
+   137.442,
+   81.6777,
+   47.8496,
+   27.5889,
+   15.6368,
+   8.7044,
+   4.75596,
 };
 
 const double MakeNtuple::PU2012_MCf[60] = {
@@ -448,6 +586,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    weight_btag=1;
    weight_mu=1;
    weight_elec=1;
+   weight_bfrag=1;
 
    // pdfs
    /*
@@ -542,12 +681,12 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
             continue;
          }
 
-         weight_pu = LumiWeights_.weight( Tnvtx );
-         T_nvertices = Tnvtx;
-
-         TotalWeight_plus = weight_pu*PShiftUp_.ShiftWeight( Tnvtx );
-         TotalWeight_minus = weight_pu*PShiftDown_.ShiftWeight( Tnvtx );
       }
+
+      weight_pu = LumiWeights_.weight( Tnvtx );
+      weight_pu_UP = LumiWeightsUP_.weight( Tnvtx );
+      weight_pu_DN = LumiWeightsDN_.weight( Tnvtx );
+      T_nvertices = Tnvtx;
 
    }
 
@@ -905,6 +1044,19 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    double elec_ptmin [] = {20, 30, 40, 50};
    double elec_ptmax [] = {30, 40, 50, 150};
 
+   // b fragmentation weights
+   edm::Handle<double> bjesweight_nuUP;
+   edm::Handle<double> bjesweight_nuDN;
+   edm::Handle<double> bjesweight_rbLEP;
+   iEvent.getByLabel("bjesweightNUUP", bjesweight_nuUP);
+   iEvent.getByLabel("bjesweightNUDN", bjesweight_nuDN);
+   iEvent.getByLabel("bjesweightRBLEP", bjesweight_rbLEP);
+
+   weight_bjes_nuUP = *bjesweight_nuUP;
+   weight_bjes_nuDN = *bjesweight_nuDN;
+   weight_bjes_rbLEP = *bjesweight_rbLEP;
+   
+
    //
    // fill trees for systematics samples
    //
@@ -913,6 +1065,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    double weight_btag_temp = weight_btag;
    double weight_mu_temp = weight_mu;
    double weight_elec_temp = weight_elec;
+   double weight_bfrag_temp = weight_bfrag;
    for( std::map<std::string, TLorentzVector>::iterator syst = metsyst.begin(); syst != metsyst.end(); syst++ ){
       std::string name = syst->first;
 
@@ -921,6 +1074,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       weight_btag = weight_btag_temp;
       weight_mu = weight_mu_temp;
       weight_elec = weight_elec_temp;
+      weight_bfrag = weight_bfrag_temp;
 
       // get syst varied quantities
       metFourVector = metsyst[name];
@@ -934,8 +1088,8 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       metUnsmeared = metFourVector;
 
       // pile up systematic
-      if( name == "PileUpUP" ) weight_pu = TotalWeight_plus;
-      if( name == "PileUpDN" ) weight_pu = TotalWeight_minus;
+      if( name == "PileUpUP" ) weight_pu = weight_pu_UP;
+      if( name == "PileUpDN" ) weight_pu = weight_pu_DN;
 
       // top pt reweighting
       double a = 0.148;
@@ -997,6 +1151,10 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
          }
 
       }
+
+      if( name == "BFRAGnuUP" ) weight_bfrag *= weight_bjes_nuUP;
+      if( name == "BFRAGnuDN" ) weight_bfrag *= weight_bjes_nuDN;
+      if( name == "BFRAGrbLEPUP" ) weight_bfrag *= weight_bjes_rbLEP;
 
       // apply jet smearing
       smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
@@ -1286,14 +1444,18 @@ MakeNtuple::beginJob()
    // pile up reweighting
    std::vector< float > PU2012_MC;
    std::vector< float > PU2012_Data;
+   std::vector< float > PU2012_DataUP;
+   std::vector< float > PU2012_DataDN;
 
    for( int i=0; i<60; i++) {
       PU2012_MC.push_back( PU2012_MCf[i] );
       PU2012_Data.push_back( PU2012_Dataf[i] );
+      PU2012_DataUP.push_back( PU2012_DatafUP[i] );
+      PU2012_DataDN.push_back( PU2012_DatafDN[i] );
    }
    LumiWeights_ = edm::LumiReWeighting( PU2012_MC, PU2012_Data);
-   PShiftDown_ = reweight::PoissonMeanShifter(-0.05);
-   PShiftUp_ = reweight::PoissonMeanShifter(0.05);
+   LumiWeightsUP_ = edm::LumiReWeighting( PU2012_MC, PU2012_DataUP);
+   LumiWeightsDN_ = edm::LumiReWeighting( PU2012_MC, PU2012_DataDN);
 
    // muon scale factors
    fmueff = new TFile("data/MuonEfficiencies_Run2012ReReco_53X.root");
@@ -1350,6 +1512,7 @@ MakeNtuple::beginJob()
       trees["Central"]->Branch("weight_btag", &weight_btag);
       trees["Central"]->Branch("weight_mu", &weight_mu);
       trees["Central"]->Branch("weight_elec", &weight_elec);
+      trees["Central"]->Branch("weight_bfrag", &weight_bfrag);
 
       trees["Central"]->Branch("geninfo_scalePDF", &geninfo_scalePDF);
       trees["Central"]->Branch("geninfo_id1", &geninfo_id1);
@@ -1402,6 +1565,9 @@ MakeNtuple::beginJob()
    systnames.push_back("BTagging");
    systnames.push_back("PDF");
    systnames.push_back("PtTopReweighting");
+   systnames.push_back("BFRAGnu");
+   systnames.push_back("BFRAGnu");
+   systnames.push_back("BFRAGrbLEP");
 
    jsystnames.push_back("CorrelationGroupMPFInSitu");
    jsystnames.push_back("CorrelationGroupFlavor");
