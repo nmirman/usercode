@@ -178,10 +178,10 @@ class MakeNtuple : public edm::EDAnalyzer {
       TLorentzVector uncorrectedJet1FourVector, uncorrectedJet2FourVector;
       TLorentzVector generatedJet1FourVector, generatedJet2FourVector, metFourVector, generatedMetFourVector;
       TLorentzVector bGEN, bbarGEN, lpGEN, lmGEN, nGEN, nbarGEN;
+      TLorentzVector metUnclustered;
       int lpPdgIdGEN, lmPdgIdGEN;
       int nPdgIdGEN, nbPdgIdGEN;
 
-      double jet1jesuncertainty, jet2jesuncertainty;
       double jet1PtResolution, jet1PhiResolution, jet1EtaResolution;
       double jet2PtResolution, jet2PhiResolution, jet2EtaResolution;
       double uncorrectedJet1PtResolution, uncorrectedJet1PhiResolution, uncorrectedJet1EtaResolution;
@@ -913,38 +913,6 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    // met
    metFourVector.SetPxPyPzE(met.px(), met.py(), met.pz(), met.energy());
 
-   // jet energy scale uncertainty
-   //std::string path = std::getenv("CMSSW_BASE");
-   JetCorrectionUncertainty *jecUnc = new JetCorrectionUncertainty( "data/Winter14_V8_DATA_Uncertainty_AK5PFchs.txt" );
-   double factor = 1;
-   double corr = 0;
-   jecUnc->setJetEta(jet1.eta());
-   jecUnc->setJetPt(jet1.pt());
-   jet1jesuncertainty = jecUnc->getUncertainty(true);
-   if (jetScale_ != 0.) {
-      // back out value of jec factor
-      factor = jet1Uncor.pt() != 0 ? jet1.pt() / jet1Uncor.pt() : 1.0;
-      jecUnc->setJetEta(jet1.eta());
-      jecUnc->setJetPt(jet1.pt());
-      corr = jetScale_*jecUnc->getUncertainty(true)/factor;
-      // correct met first
-      metFourVector -= jet1FourVector*corr;
-      jet1FourVector *= 1+corr;
-   }
-   jecUnc->setJetEta(jet2.eta());
-   jecUnc->setJetPt(jet2.pt());
-   jet2jesuncertainty = jecUnc->getUncertainty(true);
-   if (jetScale_ != 0.) {
-      factor = jet2Uncor.pt() != 0 ? jet2.pt() / jet2Uncor.pt() : 1.0;
-      jecUnc->setJetEta(jet2.eta());
-      jecUnc->setJetPt(jet2.pt());
-      corr = jetScale_*jecUnc->getUncertainty(true)/factor;
-      // correct met first
-      metFourVector -= jet2FourVector*corr;
-      jet2FourVector *= 1+corr;
-   }
-   delete jecUnc;
-
    numBJets = taggedJets_.size();
 
    lep1FourVector.SetPxPyPzE(lep1->px(), lep1->py(), lep1->pz(), lep1->energy());
@@ -956,6 +924,15 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    if (runTtbar_) {
       generatedMetFourVector.SetPxPyPzE(pmet.genMET()->px(), pmet.genMET()->py(), pmet.genMET()->pz(), pmet.genMET()->energy());
    }
+
+   // calculate unclustered energy contribution to the met
+   TLorentzVector met_uncl = metFourVector + lep1FourVector + lep2FourVector;
+   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+      TLorentzVector jetFourVector;
+      jetFourVector.SetPxPyPzE(jet->px(), jet->py(), jet->pz(), jet->energy());
+      met_uncl += jetFourVector;
+   }
+   metUnclustered = met_uncl;
 
    // save unsmeared jets and met
    TLorentzVector jet1Unsmeared = jet1FourVector;
@@ -1165,6 +1142,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       pass_selection = passOfflineSelection( metFourVector,
             jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
       if( pass_selection ) trees[name]->Fill();
+
    }
 
 }
@@ -1174,23 +1152,15 @@ MakeNtuple::passOfflineSelection( const TLorentzVector met,
       const TLorentzVector jet1, const TLorentzVector jet2,
       const TLorentzVector lep1, const TLorentzVector lep2 ){
 
-   double met_pt = 40; // only for ee and mumu events
-   double jet_pt = 30;
+   //double met_pt = 40; // only for ee and mumu events
+   double met_pt = 30;
+   //double jet_pt = 30;
+   double jet_pt = 20;
    double jet_eta = 2.5;
    double mu_pt = 20;
    double mu_eta = 2.4;
    double e_pt = 20;
    double e_eta = 2.5;
-   // skipping dilepton mass criteria
-
-   // ##### TEMPORARY SOLUTION ##### TODO
-   
-   //met_pt = 45;
-   //jet_pt = 35;
-   //mu_pt = 21;
-   //e_pt = 21;
-   
-   // ##### TEMPORARY SOLUTION ##### TODO
 
    bool met_ok = (abs(PDG1) != abs(PDG2)) or (met.Pt() > met_pt);
    bool jet1_ok = jet1.Pt() > jet_pt and fabs(jet1.Eta()) < jet_eta;
@@ -1296,10 +1266,15 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
    // jet energy scale
    for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
 
-      const char *name = jsystnames[isrc].c_str();
-      JetCorrectorParameters *p = new JetCorrectorParameters("data/Winter14_V8_DATA_UncertaintySources_AK5PFchs.txt", name);
+      std::string nametemp = jsystnames[isrc];
+      nametemp.erase( 0, 3 ); // erase 'JES'
+
+      const char *nametempc = nametemp.c_str();
+      JetCorrectorParameters *p = new JetCorrectorParameters("data/Winter14_V8_DATA_UncertaintySources_AK5PFchs.txt", nametempc);
       JetCorrectionUncertainty *unc = new JetCorrectionUncertainty(*p);
       vsrc[isrc] = unc;
+
+      const char *name = jsystnames[isrc].c_str();
 
       for(int i=0; i < 2; i++){
          metsyst[name+sgn[i]] = met;
@@ -1380,11 +1355,13 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
 
             // correct met first
             metsyst[name] -= jetFourVector*(var/factor);
+
             jetFourVector *= 1+(var/factor);
             if( isJet1 ) jet1syst[name] = jetFourVector;
             if( isJet2 ) jet2syst[name] = jetFourVector;
 
-         }
+         } // jet loop
+
       } // up and down
    } // for isrc
 
@@ -1487,10 +1464,8 @@ MakeNtuple::beginJob()
    trees["Central"]->Branch("uncorrectedJet2PhiResolution", &uncorrectedJet2PhiResolution);
    trees["Central"]->Branch("uncorrectedJet2EtaResolution", &uncorrectedJet2EtaResolution);
 
-   trees["Central"]->Branch("jet1JESUncertainty", &jet1jesuncertainty);
-   trees["Central"]->Branch("jet2JESUncertainty", &jet2jesuncertainty);
-
    trees["Central"]->Branch("metFourVector", &metFourVector);
+   trees["Central"]->Branch("metUnclustered", &metUnclustered);
 
    trees["Central"]->Branch("PDG1", &PDG1);
    trees["Central"]->Branch("PDG2", &PDG2);
@@ -1569,22 +1544,22 @@ MakeNtuple::beginJob()
    systnames.push_back("BFRAGnu");
    systnames.push_back("BFRAGrbLEP");
 
-   jsystnames.push_back("CorrelationGroupMPFInSitu");
-   jsystnames.push_back("CorrelationGroupFlavor");
-   jsystnames.push_back("CorrelationGroupIntercalibration");
-   jsystnames.push_back("CorrelationGroupUncorrelated");
-   jsystnames.push_back("CorrelationGroupbJES");
+   jsystnames.push_back("JESCorrelationGroupMPFInSitu");
+   jsystnames.push_back("JESCorrelationGroupFlavor");
+   jsystnames.push_back("JESCorrelationGroupIntercalibration");
+   jsystnames.push_back("JESCorrelationGroupUncorrelated");
+   jsystnames.push_back("JESCorrelationGroupbJES");
 
-   jsystnames.push_back("AbsoluteStat");
-   jsystnames.push_back("AbsoluteScale");
-   jsystnames.push_back("AbsoluteMPFBias");
-   jsystnames.push_back("AbsoluteFlavMap");
-   jsystnames.push_back("FlavorPureGluon");
-   jsystnames.push_back("FlavorPureQuark");
-   jsystnames.push_back("FlavorPureCharm");
-   jsystnames.push_back("FlavorPureBottom");
-   jsystnames.push_back("RelativeFSR");
-   jsystnames.push_back("Total");
+   jsystnames.push_back("JESAbsoluteStat");
+   jsystnames.push_back("JESAbsoluteScale");
+   jsystnames.push_back("JESAbsoluteMPFBias");
+   jsystnames.push_back("JESAbsoluteFlavMap");
+   jsystnames.push_back("JESFlavorPureGluon");
+   jsystnames.push_back("JESFlavorPureQuark");
+   jsystnames.push_back("JESFlavorPureCharm");
+   jsystnames.push_back("JESFlavorPureBottom");
+   jsystnames.push_back("JESRelativeFSR");
+   jsystnames.push_back("JESTotal");
 
    std::string sgn [2] = {"DN","UP"};
    for(std::vector<std::string>::iterator syst = jsystnames.begin(); syst != jsystnames.end(); syst++){
