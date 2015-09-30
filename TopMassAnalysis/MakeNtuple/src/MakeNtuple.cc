@@ -238,6 +238,8 @@ class MakeNtuple : public edm::EDAnalyzer {
       std::vector<std::string> jsystnames;
       std::map<std::string, TLorentzVector> metsyst, jet1syst, jet2syst, lep1syst, lep2syst;
 
+      std::vector<JetCorrectionUncertainty*> vsrc;
+
 };
 
 //
@@ -956,36 +958,11 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    //
    calculateSystematics( iEvent, metFourVector, jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
 
-   //
-   // fill tree for central sample (no systematic variations applied)
-   //
-   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
-         jet1FourVector, jet2FourVector, metFourVector,
-         jet1_rE[0], jet2_rE[0], met_dx[0], met_dy[0], met_dz[0], met_dE[0] ); 
-   pass_selection = passOfflineSelection( metFourVector,
-         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["Central"]->Fill();
-
-   // jet energy resolution systematics
-   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
-         jet1FourVector, jet2FourVector, metFourVector,
-         jet1_rE[1], jet2_rE[1], met_dx[1], met_dy[1], met_dz[1], met_dE[1] ); 
-   pass_selection = passOfflineSelection( metFourVector,
-         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["JetEnergyResolutionUP"]->Fill();
-
-   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
-         jet1FourVector, jet2FourVector, metFourVector,
-         jet1_rE[2], jet2_rE[2], met_dx[2], met_dy[2], met_dz[2], met_dE[2] ); 
-   pass_selection = passOfflineSelection( metFourVector,
-         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
-
-
    // for b tagging efficiency weight
    double weight_bjets [] = {-1,-1};
    weight_bjets[0] = 0.997942*((1.+(0.00923753*jet1FourVector.Pt()))/(1.+(0.0096119*jet1FourVector.Pt())));
    weight_bjets[1] = 0.997942*((1.+(0.00923753*jet2FourVector.Pt()))/(1.+(0.0096119*jet2FourVector.Pt())));
+   weight_btag = weight_bjets[0]*weight_bjets[1];
 
    // muon scale factors
    TGraph *gmueff = (TGraph*)fmueff->Get("DATA_over_MC_Loose_eta_pt20-500");
@@ -1033,6 +1010,35 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    weight_bjes_nuDN = *bjesweight_nuDN;
    weight_bjes_rbLEP = *bjesweight_rbLEP;
    
+   //
+   // fill tree for central sample (no systematic variations applied)
+   //
+   /*
+   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
+         jet1FourVector, jet2FourVector, metFourVector,
+         jet1_rE[0], jet2_rE[0], met_dx[0], met_dy[0], met_dz[0], met_dE[0] ); 
+   pass_selection = passOfflineSelection( metFourVector,
+         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+   if( pass_selection ) trees["Central"]->Fill();
+   */
+
+   // jet energy resolution systematics
+   /*
+   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
+         jet1FourVector, jet2FourVector, metFourVector,
+         jet1_rE[1], jet2_rE[1], met_dx[1], met_dy[1], met_dz[1], met_dE[1] ); 
+   pass_selection = passOfflineSelection( metFourVector,
+         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+   if( pass_selection ) trees["JetEnergyResolutionUP"]->Fill();
+
+   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
+         jet1FourVector, jet2FourVector, metFourVector,
+         jet1_rE[2], jet2_rE[2], met_dx[2], met_dy[2], met_dz[2], met_dE[2] ); 
+   pass_selection = passOfflineSelection( metFourVector,
+         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
+   if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
+   */
+
 
    //
    // fill trees for systematics samples
@@ -1134,9 +1140,24 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       if( name == "BFRAGrbLEPUP" ) weight_bfrag *= weight_bjes_rbLEP;
 
       // apply jet smearing
+      int ismear = 0;
+      if( name == "JetEnergyResolutionUP" ){
+         ismear = 1;
+      }else if( name == "JetEnergyResolutionDN" ){
+         ismear = 2;
+      }else{
+         ismear = 0;
+      }
+      // TEMP -- TURN OFF JER SMEARING
+      /*
       smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
             jet1FourVector, jet2FourVector, metFourVector,
-            jet1_rE[0], jet2_rE[0], met_dx[0], met_dy[0], met_dz[0], met_dE[0] ); 
+            jet1_rE[ismear], jet2_rE[ismear], met_dx[ismear], met_dy[ismear], met_dz[ismear], met_dE[ismear] ); 
+            */
+
+      // a hack for the Central variation (no systematics applied)
+      if( name == "CentralUP" ) name = "Central";
+      if( name == "CentralDN" ) continue;
 
       // fill syst tree
       pass_selection = passOfflineSelection( metFourVector,
@@ -1260,19 +1281,11 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
       const TLorentzVector lep1, const TLorentzVector lep2)
 {
    // Instantiate uncertainty sources
-   std::vector<JetCorrectionUncertainty*> vsrc(jsystnames.size());
+   //std::vector<JetCorrectionUncertainty*> vsrc(jsystnames.size());
    std::string sgn [2] = {"DN","UP"};
 
    // jet energy scale
    for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
-
-      std::string nametemp = jsystnames[isrc];
-      nametemp.erase( 0, 3 ); // erase 'JES'
-
-      const char *nametempc = nametemp.c_str();
-      JetCorrectorParameters *p = new JetCorrectorParameters("data/Winter14_V8_DATA_UncertaintySources_AK5PFchs.txt", nametempc);
-      JetCorrectionUncertainty *unc = new JetCorrectionUncertainty(*p);
-      vsrc[isrc] = unc;
 
       const char *name = jsystnames[isrc].c_str();
 
@@ -1284,7 +1297,6 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
          lep2syst[name+sgn[i]] = lep2;
       }
 
-      delete p;
    } // for isrc
 
    // other systematics
@@ -1314,7 +1326,6 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
    for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
       JetCorrectionUncertainty *unc = vsrc[isrc];
 
-      // up and down variations
       for(int i=0; i < 2; i++){
          std::string name = jsystnames[isrc]+sgn[i];
 
@@ -1326,8 +1337,31 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
 
             unc->setJetPt(jet->pt());
             unc->setJetEta(jet->eta());
-            int sign = i == 0 ? -1 : 1;
-            double var = sign*unc->getUncertainty(i); // 0 for down, 1 for up
+            //int sign = i == 0 ? -1 : 1;
+            //double var = sign*unc->getUncertainty(i); // 0 for down, 1 for up
+            double varDN = unc->getUncertainty(0);
+
+            unc->setJetPt(jet->pt());
+            unc->setJetEta(jet->eta());
+            double varUP = unc->getUncertainty(1);
+
+            //double var = i==0 ? varDN : varUP;
+            double var = 0;
+            if( i==0 ) var = -1.0*fabs(varDN);
+            if( i==1 ) var = fabs(varUP);
+
+            //if( jsystnames[isrc] == "JESCorrelationGroupMPFInSitu" ){
+            if( varDN != varUP )
+               std::cout << "var = " << varDN << ", " << varUP << " --> " << jsystnames[isrc] << std::endl;
+            //}
+            /*
+   jsystnames.push_back("JESCorrelationGroupMPFInSitu");
+   jsystnames.push_back("JESCorrelationGroupFlavor");
+   jsystnames.push_back("JESCorrelationGroupIntercalibration");
+   jsystnames.push_back("JESCorrelationGroupUncorrelated");
+   jsystnames.push_back("JESCorrelationGroupbJES");
+
+               */
 
             // get the uncorrected jet
             pat::Jet jetUncor = jet->correctedJet(0);
@@ -1337,16 +1371,16 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
 
             // separate Flavor uncertainties
             int flavor = jet->partonFlavour();
-            if( jsystnames[isrc] == "FlavorPureGluon" ){
+            if( jsystnames[isrc] == "JESFlavorPureGluon" ){
                if( fabs(flavor) != 21 ) var = 0.0;
             }
-            if( jsystnames[isrc] == "FlavorPureQuark" ){
+            if( jsystnames[isrc] == "JESFlavorPureQuark" ){
                if( fabs(flavor) != 1 and fabs(flavor) != 2 and fabs(flavor) != 3 ) var = 0.0;
             }
-            if( jsystnames[isrc] == "FlavorPureCharm" ){
+            if( jsystnames[isrc] == "JESFlavorPureCharm" ){
                if( fabs(flavor) != 4 ) var = 0.0;
             }
-            if( jsystnames[isrc] == "FlavorPureBottom" ){
+            if( jsystnames[isrc] == "JESFlavorPureBottom" ){
                if( fabs(flavor) != 5 ) var = 0.0;
             }
 
@@ -1397,13 +1431,12 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
             metsyst[name] += s*0.1*met_uncl;
          }
 
+         if( name.find("Central") != std::string::npos or name.find("JetEnergyResolution") != std::string::npos ){
+            // do nothing
+         }
+
       }
 
-   }
-
-   // clean up
-   for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
-      delete vsrc[isrc];
    }
 
    return;
@@ -1530,6 +1563,7 @@ MakeNtuple::beginJob()
    trees["Central"]->Branch("lumi", &(this_event_id.lumi));
    trees["Central"]->Branch("event", &(this_event_id.event));
 
+   systnames.push_back("Central");
    systnames.push_back("JetEnergyResolution");
    systnames.push_back("METUnclustered");
    systnames.push_back("PileUp");
@@ -1571,12 +1605,28 @@ MakeNtuple::beginJob()
       }
    }
    for(std::vector<std::string>::iterator syst = systnames.begin(); syst != systnames.end(); syst++){
+      if( *syst == "Central" ) continue;
       for(int i=0; i < 2; i++){
          std::string name = *syst+sgn[i];
          trees[name] = trees["Central"]->CloneTree(0);
          trees[name]->SetName(name.c_str());
          trees[name]->SetTitle(name.c_str());
       }
+   }
+
+   // uncertainty sources
+   vsrc.resize( jsystnames.size() );
+   for (unsigned int isrc = 0; isrc < jsystnames.size(); isrc++) {
+
+      std::string nametemp = jsystnames[isrc];
+      nametemp.erase( 0, 3 ); // erase 'JES'
+
+      const char *nametempc = nametemp.c_str();
+      JetCorrectorParameters *p = new JetCorrectorParameters("data/Winter14_V8_DATA_UncertaintySources_AK5PFchs.txt", nametempc);
+      JetCorrectionUncertainty *unc = new JetCorrectionUncertainty(*p);
+      vsrc[isrc] = unc;
+
+      delete p;
    }
 
 }

@@ -1,7 +1,7 @@
 #! /bin/bash
 
 indate='20150320'
-outdate='20150720'
+outdate='20150902'
 xrd='root://osg-se.cac.cornell.edu//xrootd/path/cms/store/user/nmirman/Ntuples/TopMassSkim/'$indate
 skimdir='/mnt/xrootd/user/nmirman/Ntuples/TopMassSkim/'$indate
 outdir='/mnt/xrootd/user/nmirman/Ntuples/TopMassNtuples/'$outdate
@@ -80,8 +80,9 @@ do
       skip=$(($i*$numevts))
       qsub -d . -e logs/err_${sample}_$i.txt -o logs/out_${sample}_$i.txt \
       <<< "hostname; cd ${cwd}/../..; eval `scramv1 runtime -sh` cd ${cwd}; cmsRun makentuple_cfg.py runOnMC=$optMC runTtbar=$optTtbar globalTag=$optGT fileList=${WORKING_DIR}/$filename outputFile=${WORKING_DIR}/ntuple_${sample}_$i.root randSeed=$count maxEvents=$numevts skipEvents=$skip; xrdcp ${WORKING_DIR}/ntuple_${sample}_${i}_numEvent$numevts.root ${outxrd}/${sample}/ntuple_${sample}_${i}.root; rm ${WORKING_DIR}/ntuple_${sample}_${i}_numEvent$numevts.root"
-      #cmsRun makentuple_cfg.py runOnMC=$optMC runTtbar=$optTtbar globalTag=$optGT fileList=${WORKING_DIR}/$filename outputFile=${outxrd}/ntuple_${sample}_$i.root randSeed=$count maxEvents=$numevts skipEvents=$skip
+      #cmsRun makentuple_cfg.py runOnMC=$optMC runTtbar=$optTtbar globalTag=$optGT fileList=${WORKING_DIR}/$filename outputFile=${WORKING_DIR}/ntuple_${sample}_$i.root randSeed=$count maxEvents=$numevts skipEvents=$skip
       let i=i+1
+      #break
    done
 
    let count=count+1
