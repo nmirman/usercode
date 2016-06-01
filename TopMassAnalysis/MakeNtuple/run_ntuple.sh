@@ -1,7 +1,7 @@
 #! /bin/bash
 
-indate='20150320'
-outdate='20150902'
+indate='20150510'
+outdate='20160520'
 xrd='root://osg-se.cac.cornell.edu//xrootd/path/cms/store/user/nmirman/Ntuples/TopMassSkim/'$indate
 skimdir='/mnt/xrootd/user/nmirman/Ntuples/TopMassSkim/'$indate
 outdir='/mnt/xrootd/user/nmirman/Ntuples/TopMassNtuples/'$outdate
@@ -51,7 +51,7 @@ do
    # run options
    optMC='True'
    optTtbar='False'
-   optGT='START53_V7A'
+   optGT='START53_V27'
    if [[ $sample == *TTJets* ]]
    then
       optTtbar='True'
@@ -59,11 +59,11 @@ do
    if [[ $sample == *Run2012* ]]
    then
       optMC='False'
-      optGT='FT_R_53_V18'
-      if [[ $sample == *Run2012D* ]]
-      then
-         optGT='FT_R_53_V21'
-      fi
+      optGT='FT_53_V21_AN6'
+      #if [[ $sample == *Run2012D* ]]
+      #then
+      #   optGT='FT_53_V21_AN6'
+      #fi
    fi
 
    njobs=10

@@ -8,5 +8,5 @@
 <use   name="JetMETCorrections/Objects"/>
 <use   name="PhysicsTools/Utilities" />
 <use   name="PhysicsTools/PatUtils" />
-<use   name="lhapdf"/>
+<use   name="lhapdf6"/>
 <flags EDM_PLUGIN="1"/>

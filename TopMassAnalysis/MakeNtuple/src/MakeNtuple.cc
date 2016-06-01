@@ -1011,36 +1011,6 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    weight_bjes_rbLEP = *bjesweight_rbLEP;
    
    //
-   // fill tree for central sample (no systematic variations applied)
-   //
-   /*
-   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
-         jet1FourVector, jet2FourVector, metFourVector,
-         jet1_rE[0], jet2_rE[0], met_dx[0], met_dy[0], met_dz[0], met_dE[0] ); 
-   pass_selection = passOfflineSelection( metFourVector,
-         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["Central"]->Fill();
-   */
-
-   // jet energy resolution systematics
-   /*
-   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
-         jet1FourVector, jet2FourVector, metFourVector,
-         jet1_rE[1], jet2_rE[1], met_dx[1], met_dy[1], met_dz[1], met_dE[1] ); 
-   pass_selection = passOfflineSelection( metFourVector,
-         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["JetEnergyResolutionUP"]->Fill();
-
-   smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
-         jet1FourVector, jet2FourVector, metFourVector,
-         jet1_rE[2], jet2_rE[2], met_dx[2], met_dy[2], met_dz[2], met_dE[2] ); 
-   pass_selection = passOfflineSelection( metFourVector,
-         jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-   if( pass_selection ) trees["JetEnergyResolutionDN"]->Fill();
-   */
-
-
-   //
    // fill trees for systematics samples
    //
    double weight_pu_temp = weight_pu;
@@ -1148,12 +1118,9 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       }else{
          ismear = 0;
       }
-      // TEMP -- TURN OFF JER SMEARING
-      /*
       smearJetsMET( jet1Unsmeared, jet2Unsmeared, metUnsmeared,
             jet1FourVector, jet2FourVector, metFourVector,
             jet1_rE[ismear], jet2_rE[ismear], met_dx[ismear], met_dy[ismear], met_dz[ismear], met_dE[ismear] ); 
-            */
 
       // a hack for the Central variation (no systematics applied)
       if( name == "CentralUP" ) name = "Central";
@@ -1337,31 +1304,8 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
 
             unc->setJetPt(jet->pt());
             unc->setJetEta(jet->eta());
-            //int sign = i == 0 ? -1 : 1;
-            //double var = sign*unc->getUncertainty(i); // 0 for down, 1 for up
-            double varDN = unc->getUncertainty(0);
-
-            unc->setJetPt(jet->pt());
-            unc->setJetEta(jet->eta());
-            double varUP = unc->getUncertainty(1);
-
-            //double var = i==0 ? varDN : varUP;
-            double var = 0;
-            if( i==0 ) var = -1.0*fabs(varDN);
-            if( i==1 ) var = fabs(varUP);
-
-            //if( jsystnames[isrc] == "JESCorrelationGroupMPFInSitu" ){
-            if( varDN != varUP )
-               std::cout << "var = " << varDN << ", " << varUP << " --> " << jsystnames[isrc] << std::endl;
-            //}
-            /*
-   jsystnames.push_back("JESCorrelationGroupMPFInSitu");
-   jsystnames.push_back("JESCorrelationGroupFlavor");
-   jsystnames.push_back("JESCorrelationGroupIntercalibration");
-   jsystnames.push_back("JESCorrelationGroupUncorrelated");
-   jsystnames.push_back("JESCorrelationGroupbJES");
-
-               */
+            int sign = i == 0 ? -1 : 1;
+            double var = sign*unc->getUncertainty(i); // 0 for down, 1 for up
 
             // get the uncorrected jet
             pat::Jet jetUncor = jet->correctedJet(0);
