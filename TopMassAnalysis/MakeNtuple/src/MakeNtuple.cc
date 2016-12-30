@@ -61,6 +61,8 @@ Implementation:
 #include "TFile.h"
 #include "TRandom3.h"
 #include "TGraph.h"
+#include "TH1.h"
+#include "TH2.h"
 
 #include <string>
 
@@ -136,6 +138,7 @@ class MakeNtuple : public edm::EDAnalyzer {
             double jet1_pt, double jet2_pt, double met_dx, double met_dy, double met_dz, double met_dE );
       void calculateSystematics( const edm::Event&, const TLorentzVector met, const TLorentzVector jet1, const TLorentzVector jet2,
             const TLorentzVector lep1, const TLorentzVector lep2);
+      double btag_evtweight( const edm::Handle<edm::View<pat::Jet> >& jets, int var );
 
       // ----------member data ---------------------------
       double jetScale_, leptonScale_, jetResScale_;
@@ -146,6 +149,8 @@ class MakeNtuple : public edm::EDAnalyzer {
       JetSorter js;
       event_id this_event_id;
       std::set<event_id, compare_event_id> event_ids;
+      int event_count;
+      int event_count_pass;
 
       edm::InputTag               muonTag_;
       edm::InputTag               electronTag_;
@@ -167,6 +172,20 @@ class MakeNtuple : public edm::EDAnalyzer {
       TTree *tree;
       TFile *file;
       TFile *fmueff;
+      TFile *fmueffISO;
+      TFile *ftrig_ee;
+      TFile *ftrig_emu;
+      TFile *ftrig_mumu;
+      TFile *fbeff;
+
+      TGraph *gmueff;
+      TGraph *gmueffISO;
+      TH2D *htrig_ee;
+      TH2D *htrig_emu;
+      TH2D *htrig_mumu;
+      TH2D *heffb;
+      TH2D *heffc;
+      TH2D *heffu;
 
       JetResolution *ptResol_;
       JetResolution *phiResol_;
@@ -211,6 +230,9 @@ class MakeNtuple : public edm::EDAnalyzer {
       float weight_btag;
       float weight_mu;
       float weight_elec;
+      float weight_trigger;
+      float weight_trigger_UP;
+      float weight_trigger_DN;
       float T_nvertices;
       float weight_bjes_nuUP;
       float weight_bjes_nuDN;
@@ -239,6 +261,8 @@ class MakeNtuple : public edm::EDAnalyzer {
       std::map<std::string, TLorentzVector> metsyst, jet1syst, jet2syst, lep1syst, lep2syst;
 
       std::vector<JetCorrectionUncertainty*> vsrc;
+
+      //std::string pfjetCorrectorL123_;
 
 };
 
@@ -272,7 +296,8 @@ MakeNtuple::MakeNtuple(const edm::ParameterSet& iConfig) :
    metTag_          (iConfig.getParameter<edm::InputTag>("metSrc") ),
    pmetTag_          (iConfig.getParameter<edm::InputTag>("pmetSrc") ),
    genParticleTag_         (iConfig.getParameter<edm::InputTag>("genParticleSrc") ),
-   randSeed_        (iConfig.getParameter<int>("randSeed"))
+   randSeed_        (iConfig.getParameter<int>("randSeed"))//,
+   //pfjetCorrectorL123_ (iConfig.getUntrackedParameter<std::string>("pfjetCorrectorL123"))
 
 
 
@@ -569,6 +594,7 @@ const double MakeNtuple::PU2012_MCf[60] = {
    void
 MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
+   event_count++;
    this_event_id.run   = iEvent.eventAuxiliary().run();
    this_event_id.lumi  = iEvent.eventAuxiliary().luminosityBlock();
    this_event_id.event = iEvent.eventAuxiliary().event();
@@ -589,6 +615,9 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    weight_mu=1;
    weight_elec=1;
    weight_bfrag=1;
+   weight_trigger=1;
+   weight_trigger_UP=1;
+   weight_trigger_DN=1;
 
    // pdfs
    /*
@@ -700,15 +729,25 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    reco::Vertex primary_vertex = goodVertices->at(0);
    primary_vertex_z = primary_vertex.z();
 
-
-   // Get jets that pass the b tag cut
+   // get jets
    edm::Handle<edm::View<pat::Jet> > jets;
    iEvent.getByLabel(jetTag_,jets);
-   jetcount = 0;
+   jetcount = jets->size();
+
+   // in data: apply new JEC on the fly
+   /*
+   if( !runOnMC_ ){
+      const JetCorrector* corrector = JetCorrector::getJetCorrector (pfjetCorrectorL123_,iSetup);
+
+   }
+   */
+
+
+   // Get jets that pass the b tag cut
    for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
       if (jet->bDiscriminator(bTagger_) > bTagCut_) {
          taggedJets_.push_back(*jet);
-         jetcount++;
+         //jetcount++;
       }
    }
 
@@ -716,7 +755,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
       if (jet->bDiscriminator(bTagger_) < negTagCut_) {
          negTaggedJets_.push_back(*jet);
-         jetcount++;
+         //jetcount++;
       }
    }
 
@@ -882,6 +921,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    if (goodLeptons_.size() < 2) return;
    if (goodLeptons_.size() > 2){
       std::cout << "ERROR: MORE THAN 2 LEPTONS: ";
+      std::cout << counte << " ELECTRONS, " << countmu << " MUONS" << std::endl;
       for(unsigned int i=0; i < goodLeptons_.size(); i++) std::cout << goodLeptons_[i]->pt() << " ";
       std::cout << std::endl;
       return;
@@ -891,6 +931,62 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    nmuons = goodMuons_.size();
    nelectrons = goodElectrons_.size();
+
+   // trigger scale factors
+   /*
+   TH2D *htrig_ee = (TH2D*)ftrig_ee->Get("scalefactor_eta2d_with_syst");
+   TH2D *htrig_emu = (TH2D*)ftrig_emu->Get("scalefactor_eta2d_with_syst");
+   TH2D *htrig_mumu = (TH2D*)ftrig_mumu->Get("scalefactor_eta2d_with_syst");
+   */
+   if( nmuons == 0 and nelectrons == 2 ){
+
+      double eta1 = fabs(goodElectrons_[0]->eta());
+      double eta2 = fabs(goodElectrons_[1]->eta());
+
+      int bin = htrig_ee->FindBin(eta1, eta2);
+
+      weight_trigger = htrig_ee->GetBinContent(bin);
+      weight_trigger_UP = htrig_ee->GetBinContent(bin) + htrig_ee->GetBinError(bin);
+      weight_trigger_DN = htrig_ee->GetBinContent(bin) - htrig_ee->GetBinError(bin);
+
+      if( weight_trigger == 0 ) std::cout << "Trigger SF ee: eta = " << eta1 << ", " << eta2 << std::endl;
+
+   }
+   if( nmuons == 1 and nelectrons == 1 ){
+
+      double eta1 = fabs(goodElectrons_[0]->eta());
+      double eta2 = fabs(goodMuons_[0]->eta());
+
+      int bin = htrig_emu->FindBin(eta1, eta2);
+
+      weight_trigger = htrig_emu->GetBinContent(bin);
+      weight_trigger_UP = htrig_emu->GetBinContent(bin) + htrig_emu->GetBinError(bin);
+      weight_trigger_DN = htrig_emu->GetBinContent(bin) - htrig_emu->GetBinError(bin);
+
+      if( weight_trigger == 0 ) std::cout << "Trigger SF emu: eta = " << eta1 << ", " << eta2 << std::endl;
+
+   }
+   if( nmuons == 2 and nelectrons == 0 ){
+
+      double eta1 = fabs(goodMuons_[0]->eta());
+      double eta2 = fabs(goodMuons_[1]->eta());
+
+      int bin = htrig_mumu->FindBin(eta1, eta2);
+
+      weight_trigger = htrig_mumu->GetBinContent(bin);
+      weight_trigger_UP = htrig_mumu->GetBinContent(bin) + htrig_mumu->GetBinError(bin);
+      weight_trigger_DN = htrig_mumu->GetBinContent(bin) - htrig_mumu->GetBinError(bin);
+
+      if( weight_trigger == 0 ) std::cout << "Trigger SF mumu: eta = " << eta1 << ", " << eta2 << std::endl;
+
+   }
+
+   if( weight_trigger == 0 ){
+      weight_trigger = 1;
+      weight_trigger_UP = 1;
+      weight_trigger_DN = 1;
+   }
+
 
    // get met
    edm::Handle<edm::View<reco::PFMET> > mets;
@@ -958,40 +1054,49 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    //
    calculateSystematics( iEvent, metFourVector, jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
 
-   // for b tagging efficiency weight
-   double weight_bjets [] = {-1,-1};
-   weight_bjets[0] = 0.997942*((1.+(0.00923753*jet1FourVector.Pt()))/(1.+(0.0096119*jet1FourVector.Pt())));
-   weight_bjets[1] = 0.997942*((1.+(0.00923753*jet2FourVector.Pt()))/(1.+(0.0096119*jet2FourVector.Pt())));
-   weight_btag = weight_bjets[0]*weight_bjets[1];
-
    // muon scale factors
+   // https://twiki.cern.ch/twiki/bin/viewauth/CMS/MuonReferenceEffs#22Jan2013_ReReco_of_2012_data_re
+   /*
    TGraph *gmueff = (TGraph*)fmueff->Get("DATA_over_MC_Loose_eta_pt20-500");
-   double weight_muons [] = {-1,-1};
+   TGraph *gmueffISO = (TGraph*)fmueffISO->Get("DATA_over_MC_tkRelIso_HighPt20_eta_pt20-500");
+   */
+   double weight_muonsID [] = {-1,-1};
+   double weight_muonsISO [] = {-1,-1};
    for(unsigned int i=0; i < goodMuons_.size(); i++){
+      // ID efficiency
       for(int n=0; n < gmueff->GetN(); n++){
          double x, y;
          gmueff->GetPoint(n,x,y);
          double low_edge = x - gmueff->GetErrorX(n);
          double high_edge = x + gmueff->GetErrorX(n);
-         if( goodMuons_[i]->eta() >= low_edge and goodMuons_[i]->eta() < high_edge ) weight_muons[i] = y;
+         if( goodMuons_[i]->eta() >= low_edge and goodMuons_[i]->eta() < high_edge ) weight_muonsID[i] = y;
+      }
+      // ISO efficiency
+      for(int n=0; n < gmueffISO->GetN(); n++){
+         double x, y;
+         gmueffISO->GetPoint(n,x,y);
+         double low_edge = x - gmueffISO->GetErrorX(n);
+         double high_edge = x + gmueffISO->GetErrorX(n);
+         if( goodMuons_[i]->eta() >= low_edge and goodMuons_[i]->eta() < high_edge ) weight_muonsISO[i] = y;
       }
    }
 
    // electron scale factors
+   // AN2012_429 Table 5
    double elec_factors [3][4] = {
-      {0.904, 0.977, 0.978, 0.968},
-      {0.980, 0.979, 0.980, 0.964},
-      {0.933, 0.963, 0.976, 0.975}
+      {0.975, 0.978, 0.979, 0.968},
+      {0.953, 0.974, 0.979, 0.977},
+      {0.930, 0.950, 0.974, 0.974}
    };
    double elec_factors_errUP [3][4] = {
-      {0.005, 0.001, 0.001, 0.001},
-      {0.010, 0.003, 0.000, 0.001},
-      {0.121, 0.144, 0.001, 0.001}
+      {0.017, 0.003, 0.001, 0.001},
+      {0.006, 0.002, 0.000, 0.002},
+      {0.011, 0.001, 0.001, 0.001}
    };
    double elec_factors_errDN [3][4] = {
-      {0.005, 0.001, 0.001, 0.001},
-      {0.008, 0.003, 0.000, 0.001},
-      {0.129, 0.144, 0.001, 0.002}
+      {0.004, 0.003, 0.001, 0.001},
+      {0.006, 0.002, 0.000, 0.002},
+      {0.008, 0.001, 0.001, 0.001}
    };
    double elec_etamin [] = {0.00, 0.80, 1.48};
    double elec_etamax [] = {0.80, 1.48, 2.50};
@@ -999,16 +1104,18 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    double elec_ptmax [] = {30, 40, 50, 150};
 
    // b fragmentation weights
-   edm::Handle<double> bjesweight_nuUP;
-   edm::Handle<double> bjesweight_nuDN;
-   edm::Handle<double> bjesweight_rbLEP;
-   iEvent.getByLabel("bjesweightNUUP", bjesweight_nuUP);
-   iEvent.getByLabel("bjesweightNUDN", bjesweight_nuDN);
-   iEvent.getByLabel("bjesweightRBLEP", bjesweight_rbLEP);
+   if( runOnMC_ ){
+      edm::Handle<double> bjesweight_nuUP;
+      edm::Handle<double> bjesweight_nuDN;
+      edm::Handle<double> bjesweight_rbLEP;
+      iEvent.getByLabel("bjesweightNUUP", bjesweight_nuUP);
+      iEvent.getByLabel("bjesweightNUDN", bjesweight_nuDN);
+      iEvent.getByLabel("bjesweightRBLEP", bjesweight_rbLEP);
 
-   weight_bjes_nuUP = *bjesweight_nuUP;
-   weight_bjes_nuDN = *bjesweight_nuDN;
-   weight_bjes_rbLEP = *bjesweight_rbLEP;
+      weight_bjes_nuUP = *bjesweight_nuUP;
+      weight_bjes_nuDN = *bjesweight_nuDN;
+      weight_bjes_rbLEP = *bjesweight_rbLEP;
+   }
    
    //
    // fill trees for systematics samples
@@ -1019,6 +1126,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    double weight_mu_temp = weight_mu;
    double weight_elec_temp = weight_elec;
    double weight_bfrag_temp = weight_bfrag;
+   double weight_trigger_temp = weight_trigger;
    for( std::map<std::string, TLorentzVector>::iterator syst = metsyst.begin(); syst != metsyst.end(); syst++ ){
       std::string name = syst->first;
 
@@ -1028,6 +1136,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       weight_mu = weight_mu_temp;
       weight_elec = weight_elec_temp;
       weight_bfrag = weight_bfrag_temp;
+      weight_trigger = weight_trigger_temp;
 
       // get syst varied quantities
       metFourVector = metsyst[name];
@@ -1049,27 +1158,43 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       double b = -0.00129;
       if( name.find("PtTopReweighting") != std::string::npos ) weight_toppt = sqrt( exp(a+b*t_pt)*exp(a+b*tb_pt) );
 
-      // b tag scale factors
-      // Tagger: CSVL within 20 < pt < 800 GeV, abs(eta) < 2.4, x = pt
-      float ptmin[] = {20, 30, 40, 50, 60, 70, 80, 100, 120, 160, 210, 260, 320, 400, 500, 600};
-      float ptmax[] = {30, 40, 50, 60, 70, 80,100, 120, 160, 210, 260, 320, 400, 500, 600, 800};
-      double SFb_error [] = { 0.033299, 0.0146768, 0.013803, 0.0170145, 0.0166976, 0.0137879, 0.0149072, 0.0153068, 0.0133077, 0.0123737, 0.0157152, 0.0175161, 0.0209241, 0.0278605, 0.0346928, 0.0350099 };
-      int index_jet1 = -1;
-      int index_jet2 = -1;
-      for(int i=0; i < 16; i++){
-         if( jet1FourVector.Pt() >= ptmin[i] and jet1FourVector.Pt() < ptmax[i] ) index_jet1 = i;
-         if( jet2FourVector.Pt() >= ptmin[i] and jet2FourVector.Pt() < ptmax[i] ) index_jet2 = i;
-      }
-      if( name == "BTaggingUP" ){
-         weight_btag = (weight_bjets[0]+SFb_error[index_jet1])*(weight_bjets[1]+SFb_error[index_jet2]);
-      }
-      else if( name == "BTaggingDN" ){
-         weight_btag = (weight_bjets[0]-SFb_error[index_jet1])*(weight_bjets[1]-SFb_error[index_jet2]);
-      }else{
-         weight_btag = weight_bjets[0]*weight_bjets[1];
+      // trigger scale factors
+      if( name == "TriggerUP" ) weight_trigger = weight_trigger_UP;
+      if( name == "TriggerDN" ) weight_trigger = weight_trigger_DN;
+
+      // b tag efficiency weight
+      weight_btag = 1;
+      if (runOnMC_) {
+         weight_btag = btag_evtweight( jets, 0 );
+         if( name == "BTaggingUP" ){
+            weight_btag = btag_evtweight( jets, 1 );
+         }
+         if( name == "BTaggingDN" ){
+            weight_btag = btag_evtweight( jets, 2 );
+         }
       }
 
-      // muon ID scale factors
+      // 0.5% ID, 0.2% isolation error
+      if( name == "MuonIdUP" ){
+         for(int i=0; i < 2; i++){
+            if( weight_muonsID[i] != -1 ) weight_muonsID[i] *= 1.005;
+            if( weight_muonsISO[i] != -1 ) weight_muonsISO[i] *= 1.002;
+         }
+      }
+      if( name == "MuonIdDN" ){
+         for(int i=0; i < 2; i++){
+            if( weight_muonsID[i] != -1 ) weight_muonsID[i] *= 0.995;
+            if( weight_muonsISO[i] != -1 ) weight_muonsISO[i] *= 0.998;
+         }
+      }
+
+      // apply muon ID/ISO scale factors
+      double weight_muons [] = {1, 1};
+      for(int i=0; i < 2; i++){
+         if( weight_muonsID[i] != -1 ) weight_muons[i] *= weight_muonsID[i];
+         if( weight_muonsISO[i] != -1 ) weight_muons[i] *= weight_muonsISO[i];
+         if( weight_muons[i] == 1 ) weight_muons[i] = -1;
+      }
       int count_mu = 0;
       for(int i=0; i < 2; i++){
          if( weight_muons[i] != -1 ){
@@ -1077,8 +1202,7 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
             count_mu++;
          }
       }
-      if( name == "MuonIdUP" ) weight_mu *= pow(1.005,count_mu);
-      if( name == "MuonIdDN" ) weight_mu *= pow(0.995,count_mu);
+   
 
       // electron scale factors
       for(unsigned int i=0; i < goodElectrons_.size(); i++){
@@ -1129,7 +1253,10 @@ MakeNtuple::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       // fill syst tree
       pass_selection = passOfflineSelection( metFourVector,
             jet1FourVector, jet2FourVector, lep1FourVector, lep2FourVector );
-      if( pass_selection ) trees[name]->Fill();
+      if( pass_selection ){
+         trees[name]->Fill();
+         if( name == "Central" ) event_count_pass++;
+      }
 
    }
 
@@ -1159,7 +1286,129 @@ MakeNtuple::passOfflineSelection( const TLorentzVector met,
                                  : (lep2.Pt() > mu_pt and fabs(lep2.Eta()) < mu_eta);
    bool Zpeak_ok = abs(PDG1) != abs(PDG2) or ((lep1+lep2).M() < 60 or (lep1+lep2).M() > 120);
 
+   /*
+   std::cout << "==== Event stats ====" << std::endl;
+   if( !met_ok ) std::cout << "Failed met_ok" << std::endl;
+   if( !jet1_ok ) std::cout << "Failed jet1_ok" << std::endl;
+   if( !jet2_ok ) std::cout << "Failed jet2_ok" << std::endl;
+   if( !lep1_ok ) std::cout << "Failed lep1_ok" << std::endl;
+   if( !lep2_ok ) std::cout << "Failed lep2_ok" << std::endl;
+   if( !Zpeak_ok ) std::cout << "Failed Zpeak_ok" << std::endl;
+   */
    return (met_ok and jet1_ok and jet2_ok and lep1_ok and lep2_ok and Zpeak_ok );
+}
+
+   double
+MakeNtuple::btag_evtweight( const edm::Handle<edm::View<pat::Jet> >& jets, int var ){
+   // implements method 1(a) for event weight
+   // https://twiki.cern.ch/twiki/bin/view/CMS/BTagSFMethods#1a_Event_reweighting_using_scale
+
+   /*
+   TH2D *heffb = (TH2D*)fbeff->Get("heff_b");
+   TH2D *heffc = (TH2D*)fbeff->Get("heff_c");
+   TH2D *heffu = (TH2D*)fbeff->Get("heff_u");
+   */
+
+   // for b tag efficiency scale factors
+   // https://twiki.cern.ch/twiki/bin/viewauth/CMS/BtagRecommendation53XReReco
+   float ptmin[] = {20, 30, 40, 50, 60, 70, 80, 100, 120, 160, 210, 260, 320, 400, 500, 600};
+   float ptmax[] = {30, 40, 50, 60, 70, 80,100, 120, 160, 210, 260, 320, 400, 500, 600, 800};
+   double SFb_error [] = { 0.033299, 0.0146768, 0.013803, 0.0170145, 0.0166976, 0.0137879, 0.0149072, 0.0153068, 0.0133077, 0.0123737, 0.0157152, 0.0175161, 0.0209241, 0.0278605, 0.0346928, 0.0350099 };
+   // SFc_error = 2 * SFb_error
+
+   double PMC = 1;
+   double PDATA = 1;
+   for(edm::View<pat::Jet>::const_iterator jet = jets->begin(); jet!=jets->end();++jet){
+
+      double jpt = jet->pt();
+      double jeta = jet->eta();
+      int flav = jet->partonFlavour();
+
+      // jets that pass selection
+      if( jpt < 30 or fabs(jeta) > 2.5 ) continue;
+
+      // get efficiency
+      double heff = 1;
+      if( abs(flav) == 5 ){
+         heff = heffb->GetBinContent( heffb->FindBin(jpt,jeta) );
+         if( heff == 0 ) heff = 1;
+      }
+      else if( abs(flav) == 4 ){
+         heff = heffc->GetBinContent( heffc->FindBin(jpt,jeta) );
+      }
+      else{
+         heff = heffu->GetBinContent( heffu->FindBin(jpt,jeta) );
+      }
+
+      // get b tag efficiency scale factor
+      double x = jpt;
+      double SFb = 0.997942*((1.+(0.00923753*x))/(1.+(0.0096119*x)));
+      double SFc = 0.997942*((1.+(0.00923753*x))/(1.+(0.0096119*x)));
+
+      double SFu = 1;
+      double SFuMin = 1;
+      double SFuMax = 1;
+      if( fabs(jeta) < 0.5 ){
+         SFu = ((1.01177+(0.0023066*x))+(-4.56052e-06*(x*x)))+(2.57917e-09*(x*(x*x)));
+         SFuMin = ((0.977761+(0.00170704*x))+(-3.2197e-06*(x*x)))+(1.78139e-09*(x*(x*x)));
+         SFuMax = ((1.04582+(0.00290226*x))+(-5.89124e-06*(x*x)))+(3.37128e-09*(x*(x*x)));
+      } else if ( fabs(jeta) < 1.0 ){
+         SFu = ((0.975966+(0.00196354*x))+(-3.83768e-06*(x*x)))+(2.17466e-09*(x*(x*x)));
+         SFuMin = ((0.945135+(0.00146006*x))+(-2.70048e-06*(x*x)))+(1.4883e-09*(x*(x*x)));
+         SFuMax = ((1.00683+(0.00246404*x))+(-4.96729e-06*(x*x)))+(2.85697e-09*(x*(x*x)));
+      } else if ( fabs(jeta) < 1.5 ){
+         SFu = ((0.93821+(0.00180935*x))+(-3.86937e-06*(x*x)))+(2.43222e-09*(x*(x*x)));
+         SFuMin = ((0.911657+(0.00142008*x))+(-2.87569e-06*(x*x)))+(1.76619e-09*(x*(x*x)));
+         SFuMax = ((0.964787+(0.00219574*x))+(-4.85552e-06*(x*x)))+(3.09457e-09*(x*(x*x)));
+      } else {
+         SFu = ((1.00022+(0.0010998*x))+(-3.10672e-06*(x*x)))+(2.35006e-09*(x*(x*x)));
+         SFuMin = ((0.970045+(0.000862284*x))+(-2.31714e-06*(x*x)))+(1.68866e-09*(x*(x*x)));
+         SFuMax = ((1.03039+(0.0013358*x))+(-3.89284e-06*(x*x)))+(3.01155e-09*(x*(x*x)));
+      }
+
+      // add errors
+      int jindex = 15;
+      for(int i=0; i < 16; i++){
+         if( jpt >= ptmin[i] and jpt < ptmax[i] ) jindex = i;
+      }
+      if( var == 1 ){
+         SFb += SFb_error[jindex];
+         SFc += 2*SFb_error[jindex];
+         SFu = SFuMax;
+      }
+      if( var == 2 ){
+         SFb -= SFb_error[jindex];
+         SFc -= 2*SFb_error[jindex];
+         SFu = SFuMin;
+      }
+
+      // get scale factor
+      double sf = 1.0;
+      if( fabs(flav) == 5 ) sf = SFb;
+      else if( fabs(flav) == 4 ) sf = SFc;
+      else sf = SFu;
+
+      // compute event probabilities
+      if (jet->bDiscriminator(bTagger_) > bTagCut_) {
+         PMC *= heff;
+         PDATA *= sf*heff;
+      } else {
+         PMC *= 1-heff;
+         PDATA *= 1-sf*heff;
+      }
+   }
+
+   // check for strange factors
+   if( PMC == 0 ){
+      std::cout << "ZERO B TAG DENOM" << std::endl;
+      PMC = 1;
+   }
+   if( PDATA == 0 ){
+      std::cout << "ZERO B TAG NUM" << std::endl;
+      PDATA = 1;
+   }
+
+   return PDATA/PMC;
 }
 
    void
@@ -1390,6 +1639,8 @@ MakeNtuple::calculateSystematics( const edm::Event& iEvent, const TLorentzVector
    void 
 MakeNtuple::beginJob()
 {
+   event_count = 0;
+   event_count_pass = 0;
 
    // pdfs
    //LHAPDF::initPDFSet(1, "ct10nnlo.LHgrid");
@@ -1412,7 +1663,27 @@ MakeNtuple::beginJob()
    LumiWeightsDN_ = edm::LumiReWeighting( PU2012_MC, PU2012_DataDN);
 
    // muon scale factors
-   fmueff = new TFile("data/MuonEfficiencies_Run2012ReReco_53X.root");
+   //fmueff = new TFile("data/MuonEfficiencies_Run2012ReReco_53X.root");
+   fmueff = TFile::Open("root://osg-se.cac.cornell.edu///xrootd/path/cms/store/user/nmirman/corrfiles/MuonEfficiencies_Run2012ReReco_53X.root");
+   fmueffISO = TFile::Open("root://osg-se.cac.cornell.edu///xrootd/path/cms/store/user/nmirman/corrfiles/MuonEfficiencies_ISO_Run_2012ReReco_53X.root");
+   gmueff = (TGraph*)fmueff->Get("DATA_over_MC_Loose_eta_pt20-500");
+   gmueffISO = (TGraph*)fmueffISO->Get("DATA_over_MC_tkRelIso_HighPt20_eta_pt20-500");
+
+   // trigger scale factors
+   // https://twiki.cern.ch/twiki/bin/viewauth/CMS/DileptonTriggerResults
+   ftrig_ee = TFile::Open("root://osg-se.cac.cornell.edu///xrootd/path/cms/store/user/nmirman/corrfiles/triggerSummary_TOP-14-017_ee.root");
+   ftrig_emu = TFile::Open("root://osg-se.cac.cornell.edu///xrootd/path/cms/store/user/nmirman/corrfiles/triggerSummary_TOP-14-017_emu.root");
+   ftrig_mumu = TFile::Open("root://osg-se.cac.cornell.edu///xrootd/path/cms/store/user/nmirman/corrfiles/triggerSummary_TOP-14-017_mumu.root");
+   htrig_ee = (TH2D*)ftrig_ee->Get("scalefactor_eta2d_with_syst");
+   htrig_emu = (TH2D*)ftrig_emu->Get("scalefactor_eta2d_with_syst");
+   htrig_mumu = (TH2D*)ftrig_mumu->Get("scalefactor_eta2d_with_syst");
+
+   // b tag efficiencies
+   // measured in TopMassAnalysis/BTagEff/
+   fbeff = TFile::Open("root://osg-se.cac.cornell.edu///xrootd/path/cms/store/user/nmirman/corrfiles/btag_eff.root");
+   heffb = (TH2D*)fbeff->Get("heff_b");
+   heffc = (TH2D*)fbeff->Get("heff_c");
+   heffu = (TH2D*)fbeff->Get("heff_u");
 
    file = new TFile(outFileName_.c_str(), "RECREATE");
    file->cd();
@@ -1465,6 +1736,7 @@ MakeNtuple::beginJob()
       trees["Central"]->Branch("weight_mu", &weight_mu);
       trees["Central"]->Branch("weight_elec", &weight_elec);
       trees["Central"]->Branch("weight_bfrag", &weight_bfrag);
+      trees["Central"]->Branch("weight_trigger", &weight_trigger);
 
       trees["Central"]->Branch("geninfo_scalePDF", &geninfo_scalePDF);
       trees["Central"]->Branch("geninfo_id1", &geninfo_id1);
@@ -1521,6 +1793,7 @@ MakeNtuple::beginJob()
    systnames.push_back("BFRAGnu");
    systnames.push_back("BFRAGnu");
    systnames.push_back("BFRAGrbLEP");
+   systnames.push_back("Trigger");
 
    jsystnames.push_back("JESCorrelationGroupMPFInSitu");
    jsystnames.push_back("JESCorrelationGroupFlavor");
@@ -1583,6 +1856,13 @@ MakeNtuple::endJob()
    file->Write();
    file->Close();
    fmueff->Close();
+   fmueffISO->Close();
+   ftrig_ee->Close();
+   ftrig_emu->Close();
+   ftrig_mumu->Close();
+   fbeff->Close();
+   std::cout << "TOTAL NUMBER OF EVENTS ANALYZED = " << event_count << std::endl;
+   std::cout << "TOTAL NUMBER OF EVENTS PASSING CUTS = " << event_count_pass << std::endl;
 }
 
 // ------------ method called when starting to processes a run  ------------

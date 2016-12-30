@@ -8,7 +8,7 @@ options = VarParsing ('analysis')
 options.setDefault( 'maxEvents', -1)
 
 options.setDefault( 'outputFile',
-      'ntuple.root' )
+      'btageff.root' )
 
 options.register( 'runOnMC',
       False,
@@ -74,43 +74,16 @@ process.source = cms.Source("PoolSource",
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 process.GlobalTag.globaltag = ( options.globalTag+'::All' )
 
-process.load("TopMassAnalysis.MakeNtuple.makentuple_cfi")
-process.makentuple.outFileName = options.outputFile
-process.makentuple.runOnMC = options.runOnMC
-process.makentuple.runTtbar = cms.bool( options.runTtbar )
-process.makentuple.negTagCut = 0.244
-process.makentuple.randSeed = options.randSeed
+process.load("TopMassAnalysis.BTagEff.btageff_cfi")
+process.demo.outFileName = options.outputFile
+process.demo.runOnMC = options.runOnMC
+process.demo.runTtbar = cms.bool( options.runTtbar )
+process.demo.negTagCut = 0.244
+process.demo.randSeed = options.randSeed
 
-# Produce PDF weights (maximum is 3)
-#process.pdfWeights = cms.EDProducer("PdfWeightProducer",
-#      # Fix POWHEG if buggy (this PDF set will also appear on output,
-#      # so only two more PDF sets can be added in PdfSetNames if not "")
-#      #FixPOWHEG = cms.untracked.string("cteq66.LHgrid"),
-#      #GenTag = cms.untracked.InputTag("genParticles"),
-#      PdfInfoTag = cms.untracked.InputTag("generator"),
-#      PdfSetNames = cms.untracked.vstring(
-#         "cteq66.LHgrid"
-#         , "MRST2006nnlo.LHgrid"
-#         , "NNPDF10_100.LHgrid"
-#         )
-#      )
+process.TFileService = cms.Service('TFileService',
+         fileName = cms.string(options.outputFile)
+         )
 
-process.load('TopAnalysis.TopUtils.EventWeightBJES_cfi')
-
-# produce new JECs for data
-#process.ak5PFchsL1FastL2L3Res = cms.ESSource(
-#      'LXXXCorrectionService',
-#      era = cms.string(''),
-#      section = cms.string(''),
-#      level = cms.string(''),
-#      algorithm = cms.string('AK5PFchs'),
-#      useCondDB = cms.untracked.bool(False)
-#      )
-#
-#process.TFileService = cms.Service("TFileService", 
-#      fileName = cms.string("histo.root"),
-#      #closeFileFast = cms.untracked.bool(True)
-#      )
-
-process.p = cms.Path(process.makentuple)
+process.p = cms.Path(process.demo)
 

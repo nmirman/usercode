@@ -1,0 +1,16 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/PluginManager"/>
+<use name="FWCore/ParameterSet"/>
+<use name="PhysicsTools/UtilAlgos"/>
+<use name="FWCore/ServiceRegistry"/>
+<use name="DataFormats/CLHEP"/>
+<use name="DataFormats/PatCandidates"/>
+<use name="CondFormats/JetMETObjects" />
+<use name="JetMETCorrections/Objects"/>
+<use name="PhysicsTools/Utilities" />
+<use name="PhysicsTools/PatUtils" />
+<use name="lhapdf6"/>
+<flags EDM_PLUGIN="1"/>
+<export>
+   <lib name="1"/>
+</export>
